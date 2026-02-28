@@ -1,0 +1,36 @@
+.home {
+  text-align: center;
+}
+
+.home h1 {
+  margin-bottom: 2rem;
+  color: #2c3e50;
+}
+
+.status-card {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.status-card h2 {
+  margin-bottom: 1rem;
+  color: #34495e;
+}
+
+.loading {
+  color: #7f8c8d;
+}
+
+.success {
+  color: #27ae60;
+  font-weight: 500;
+}
+
+.error {
+  color: #e74c3c;
+  font-weight: 500;
+}
