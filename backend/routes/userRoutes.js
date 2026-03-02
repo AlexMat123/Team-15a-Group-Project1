@@ -6,9 +6,23 @@ const {
   createUser,
   updateUser,
   deleteUser,
+  resetUserPassword,
 } = require('../controllers/userController');
+const { protect, authorize } = require('../middleware/authMiddleware');
 
-router.route('/').get(getUsers).post(createUser);
-router.route('/:id').get(getUserById).put(updateUser).delete(deleteUser);
+router.use(protect);
+
+router
+  .route('/')
+  .get(authorize('admin', 'team_leader'), getUsers)
+  .post(authorize('admin', 'team_leader'), createUser);
+
+router
+  .route('/:id')
+  .get(authorize('admin', 'team_leader'), getUserById)
+  .put(authorize('admin', 'team_leader'), updateUser)
+  .delete(authorize('admin', 'team_leader'), deleteUser);
+
+router.put('/:id/reset-password', authorize('admin', 'team_leader'), resetUserPassword);
 
 module.exports = router;
