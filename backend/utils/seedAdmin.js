@@ -7,21 +7,40 @@ const seedAdmin = async () => {
     
     if (!adminExists) {
       const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash('Admin123!', salt);
+      const hashedAdminPassword = await bcrypt.hash('Admin123!', salt);
       
-      const admin = await User.create({
+      await User.create({
         name: 'System Admin',
         email: 'admin@qcchecker.com',
-        password: hashedPassword,
+        password: hashedAdminPassword,
         role: 'admin',
         status: 'active',
         mustChangePassword: false,
       });
       
-      console.log('Default admin created: admin@qcchecker.com');
+      console.log('Default admin created: admin@qcchecker.com / Admin123!');
     }
+
+    const testUserExists = await User.findOne({ email: 'user@qcchecker.com' });
+    
+    if (!testUserExists) {
+      const salt = await bcrypt.genSalt(10);
+      const hashedUserPassword = await bcrypt.hash('Welcome123!', salt);
+      
+      await User.create({
+        name: 'Test User',
+        email: 'user@qcchecker.com',
+        password: hashedUserPassword,
+        role: 'user',
+        status: 'active',
+        mustChangePassword: true,
+      });
+      
+      console.log('Test user created: user@qcchecker.com / Welcome123!');
+    }
+
   } catch (error) {
-    console.error('Error seeding admin:', error.message);
+    console.error('Error seeding users:', error.message);
   }
 };
 
