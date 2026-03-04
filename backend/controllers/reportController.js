@@ -1,4 +1,5 @@
 const Report = require('../models/Report');
+const { processDocument } = require('../services/pdfService');
 const fs = require('fs');
 const path = require('path');
 
@@ -13,7 +14,7 @@ const uploadReport = async (req, res) => {
       filePath: req.file.path,
       fileSize: req.file.size,
       analyzedBy: req.user._id,
-      status: 'pending',
+      status: 'processing',
     });
 
     res.status(201).json({
@@ -21,8 +22,11 @@ const uploadReport = async (req, res) => {
       filename: report.filename,
       fileSize: report.fileSize,
       status: report.status,
-      message: 'File uploaded successfully. Analysis pending.',
+      message: 'File uploaded successfully. Processing started.',
     });
+
+    processReportAsync(report._id, req.file.path);
+
   } catch (error) {
     if (req.file) {
       fs.unlink(req.file.path, (err) => {
@@ -30,6 +34,60 @@ const uploadReport = async (req, res) => {
       });
     }
     console.error('Upload error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const processReportAsync = async (reportId, filePath) => {
+  try {
+    const documentData = await processDocument(filePath);
+
+    await Report.findByIdAndUpdate(reportId, {
+      status: 'analyzed',
+      extractedText: documentData.text,
+      metadata: {
+        pageCount: documentData.numPages,
+        wordCount: documentData.wordCount,
+        sections: documentData.sections.map(s => s.title),
+      },
+    });
+
+    console.log(`Report ${reportId} processed successfully`);
+  } catch (error) {
+    console.error(`Error processing report ${reportId}:`, error);
+    await Report.findByIdAndUpdate(reportId, {
+      status: 'failed',
+    });
+  }
+};
+
+const analyzeReport = async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id);
+
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    if (
+      req.user.role === 'user' &&
+      report.analyzedBy.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    if (!report.filePath || !fs.existsSync(report.filePath)) {
+      return res.status(400).json({ message: 'PDF file not found' });
+    }
+
+    report.status = 'processing';
+    await report.save();
+
+    res.json({ message: 'Analysis started', reportId: report._id });
+
+    processReportAsync(report._id, report.filePath);
+
+  } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
@@ -49,6 +107,7 @@ const getReports = async (req, res) => {
     }
 
     const reports = await Report.find(query)
+      .select('-extractedText')
       .populate('analyzedBy', 'name email')
       .sort({ createdAt: -1 });
 
@@ -95,7 +154,7 @@ const deleteReport = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to delete this report' });
     }
 
-    if (report.filePath) {
+    if (report.filePath && fs.existsSync(report.filePath)) {
       fs.unlink(report.filePath, (err) => {
         if (err) console.error('Error deleting file:', err);
       });
@@ -157,10 +216,36 @@ const getReportStats = async (req, res) => {
   }
 };
 
+const getReportText = async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id).select('extractedText filename analyzedBy');
+
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    if (
+      req.user.role === 'user' &&
+      report.analyzedBy.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    res.json({
+      filename: report.filename,
+      text: report.extractedText || 'No text extracted yet',
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   uploadReport,
+  analyzeReport,
   getReports,
   getReportById,
   deleteReport,
   getReportStats,
+  getReportText,
 };

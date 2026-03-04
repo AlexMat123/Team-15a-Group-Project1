@@ -82,6 +82,11 @@ const reportSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    metadata: {
+      pageCount: { type: Number, default: 0 },
+      wordCount: { type: Number, default: 0 },
+      sections: [String],
+    },
   },
   {
     timestamps: true,

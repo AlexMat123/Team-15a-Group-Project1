@@ -2,10 +2,12 @@ const express = require('express');
 const router = express.Router();
 const {
   uploadReport,
+  analyzeReport,
   getReports,
   getReportById,
   deleteReport,
   getReportStats,
+  getReportText,
 } = require('../controllers/reportController');
 const { protect } = require('../middleware/authMiddleware');
 const { upload, handleUploadError } = require('../middleware/uploadMiddleware');
@@ -23,5 +25,8 @@ router
   .route('/:id')
   .get(getReportById)
   .delete(deleteReport);
+
+router.post('/:id/analyze', analyzeReport);
+router.get('/:id/text', getReportText);
 
 module.exports = router;
