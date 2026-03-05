@@ -41,9 +41,11 @@ build-frontend:
   script:
     - cd frontend && npm run build
 
-test-backend:
-  stage: test
-  dependencies:
-    - install-backend
-  script:
-    - cd backend && npm test  --passWithNoTests #passes with no test for now
+# test-backend:
+#   stage: test
+#   dependencies:
+#     - install-backend
+#   script:
+#     - cd backend && npm test 
+
+#uncomment when there's tests
