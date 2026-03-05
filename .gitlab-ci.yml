@@ -1,0 +1,68 @@
+stages:
+  - install
+  - build
+  - test
+
+cache:
+  key: node-cache-key
+  paths:
+    - backend/node_modules/
+    - frontend/node_modules/
+
+install-backend:
+  stage: install
+  image: node:18
+  tags:
+    - comsc-ci
+  script:
+    - cd backend && npm install
+  artifacts:
+    paths:
+      - backend/node_modules/
+    expire_in: 1 week
+
+install-frontend:
+  stage: install
+  image: node:18
+  tags:
+    - comsc-ci
+  script:
+    - cd frontend && npm install
+  artifacts:
+    paths:
+      - frontend/node_modules/
+    expire_in: 1 week
+
+build-frontend:
+  stage: build
+  image: node:18
+  tags:
+    - comsc-ci
+  dependencies:
+    - install-frontend
+  script:
+    - cd frontend && npm run build
+  artifacts:
+    paths:
+      - frontend/dist/
+    expire_in: 1 week
+
+lint-frontend:
+  stage: build
+  image: node:18
+  tags:
+    - comsc-ci
+  dependencies:
+    - install-frontend
+  script:
+    - cd frontend && npm run lint
+
+test-backend:
+  stage: test
+  image: node:18
+  tags:
+    - comsc-ci
+  dependencies:
+    - install-backend
+  script:
+    - cd backend && npm test
