@@ -1,7 +1,9 @@
+image: node:18
+
 default:
-  image: node:18
+  
   tags:
-    - docker
+    - comsc-ci
 
 stages:
   - install
