@@ -1,5 +1,7 @@
 default:
   image: node:18
+  tags:
+    - docker
 
 stages:
   - install
