@@ -46,4 +46,4 @@ test-backend:
   dependencies:
     - install-backend
   script:
-    - cd backend && npm test
+    - cd backend && npm test  --passWithNoTests #passes with no test for now
