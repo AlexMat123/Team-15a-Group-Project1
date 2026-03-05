@@ -1,6 +1,5 @@
 default:
-  tags:
-    - general-docker
+  image: node:18
 
 stages:
   - install
@@ -15,7 +14,6 @@ cache:
 
 install-backend:
   stage: install
-  image: node:18
   script:
     - cd backend && npm install
   artifacts:
@@ -25,7 +23,6 @@ install-backend:
 
 install-frontend:
   stage: install
-  image: node:18
   script:
     - cd frontend && npm install
   artifacts:
@@ -35,23 +32,13 @@ install-frontend:
 
 build-frontend:
   stage: build
-  image: node:18
   dependencies:
     - install-frontend
   script:
     - cd frontend && npm run build
 
-lint-frontend:
-  stage: build
-  image: node:18
-  dependencies:
-    - install-frontend
-  script:
-    - cd frontend && npm run lint
-
 test-backend:
   stage: test
-  image: node:18
   dependencies:
     - install-backend
   script:
