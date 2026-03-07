@@ -1,10 +1,156 @@
-import { Upload } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Upload, FileText, Trash2, Clock, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import api from '../services/api';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const fileInputRef = useRef(null);
+  
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [dragActive, setDragActive] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    fetchReports();
+  }, []);
+
+  const fetchReports = async () => {
+    try {
+      const response = await api.get('/reports');
+      setReports(response.data);
+    } catch (err) {
+      console.error('Error fetching reports:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileInput = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFile(e.target.files[0]);
+    }
+  };
+
+  const handleFile = async (file) => {
+    setError('');
+    setSuccess('');
+
+    if (file.type !== 'application/pdf') {
+      setError('Please upload a PDF file');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File size must be less than 10MB');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+
+    const formData = new FormData();
+    formData.append('pdf', file);
+
+    try {
+      const response = await api.post('/reports', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          setUploadProgress(progress);
+        },
+      });
+
+      setSuccess(`${file.name} uploaded successfully!`);
+      fetchReports();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDelete = async (reportId) => {
+    if (!window.confirm('Are you sure you want to delete this report?')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/reports/${reportId}`);
+      setReports(reports.filter((r) => r._id !== reportId));
+      setSuccess('Report deleted successfully');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to delete report');
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const getStatusBadge = (status) => {
+    const badges = {
+      pending: { color: 'bg-yellow-100 text-yellow-800', icon: Clock, text: 'Pending' },
+      processing: { color: 'bg-blue-100 text-blue-800', icon: Loader2, text: 'Processing' },
+      analyzed: { color: 'bg-green-100 text-green-800', icon: CheckCircle, text: 'Analyzed' },
+      failed: { color: 'bg-red-100 text-red-800', icon: AlertCircle, text: 'Failed' },
+    };
+    
+    const badge = badges[status] || badges.pending;
+    const Icon = badge.icon;
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}>
+        <Icon className={`w-3 h-3 mr-1 ${status === 'processing' ? 'animate-spin' : ''}`} />
+        {badge.text}
+      </span>
+    );
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -16,27 +162,163 @@ const Dashboard = () => {
           <p className="text-gray-600">Upload a PDF report to detect errors automatically</p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border-2 border-dashed border-gray-300 p-12">
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center">
+            <AlertCircle className="w-5 h-5 mr-2" />
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg flex items-center">
+            <CheckCircle className="w-5 h-5 mr-2" />
+            {success}
+          </div>
+        )}
+
+        <div
+          className={`bg-white rounded-xl shadow-sm border-2 border-dashed p-12 transition-colors ${
+            dragActive
+              ? 'border-indigo-500 bg-indigo-50'
+              : 'border-gray-300 hover:border-gray-400'
+          }`}
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+        >
           <div className="flex flex-col items-center justify-center text-center">
-            <Upload className="w-12 h-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Upload QC Report
-            </h3>
-            <p className="text-gray-500 mb-4">
-              Select a PDF file to analyze
-            </p>
-            <button className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-semibold">
-              Choose File
-            </button>
-            <p className="text-xs text-gray-400 mt-4">
-              PDF files only, max 10MB
-            </p>
+            {uploading ? (
+              <>
+                <Loader2 className="w-12 h-12 text-indigo-600 mb-4 animate-spin" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Uploading...
+                </h3>
+                <div className="w-64 bg-gray-200 rounded-full h-2.5 mb-2">
+                  <div
+                    className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+                <p className="text-sm text-gray-500">{uploadProgress}%</p>
+              </>
+            ) : (
+              <>
+                <Upload className={`w-12 h-12 mb-4 ${dragActive ? 'text-indigo-600' : 'text-gray-400'}`} />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  {dragActive ? 'Drop your file here' : 'Upload QC Report'}
+                </h3>
+                <p className="text-gray-500 mb-4">
+                  Drag and drop a PDF file, or click to browse
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleFileInput}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-semibold cursor-pointer"
+                >
+                  Choose File
+                </label>
+                <p className="text-xs text-gray-400 mt-4">
+                  PDF files only, max 10MB
+                </p>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="mt-8 p-4 bg-blue-50 rounded-lg text-sm text-blue-700">
-          <p className="font-semibold">Welcome, {user?.name}!</p>
-          <p>Upload functionality will be implemented in Phase 2.</p>
+        <div className="mt-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Your Reports</h2>
+          
+          {loading ? (
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-2" />
+              <p className="text-gray-500">Loading reports...</p>
+            </div>
+          ) : reports.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No reports yet. Upload your first PDF to get started.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Report
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Errors
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {reports.map((report) => (
+                    <tr key={report._id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <FileText className="w-8 h-8 text-red-500 mr-3" />
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {report.filename}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {formatFileSize(report.fileSize)}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getStatusBadge(report.status)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {report.status === 'analyzed' ? (
+                          <span className={`text-sm font-medium ${report.errorCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {report.errorCount} {report.errorCount === 1 ? 'error' : 'errors'}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatDate(report.createdAt)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <Link
+                          to={`/report/${report._id}`}
+                          className="text-indigo-600 hover:text-indigo-900 mr-4"
+                        >
+                          View
+                        </Link>
+                        <button
+                          onClick={() => handleDelete(report._id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <Trash2 className="w-4 h-4 inline" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </main>
 
