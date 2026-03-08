@@ -1,5 +1,6 @@
 const Report = require('../models/Report');
 const { processDocument } = require('../services/pdfService');
+const { analyzeDocument } = require('../services/errorDetection');
 const fs = require('fs');
 const path = require('path');
 
@@ -40,11 +41,23 @@ const uploadReport = async (req, res) => {
 
 const processReportAsync = async (reportId, filePath) => {
   try {
+    console.log(`Processing report ${reportId}...`);
+    
     const documentData = await processDocument(filePath);
+    console.log(`Text extracted: ${documentData.wordCount} words`);
+
+    const analysisResults = await analyzeDocument(
+      documentData.text,
+      documentData.sections
+    );
+    console.log(`Analysis complete: ${analysisResults.errorCount} errors found`);
 
     await Report.findByIdAndUpdate(reportId, {
       status: 'analyzed',
       extractedText: documentData.text,
+      errors: analysisResults.errors,
+      errorCount: analysisResults.errorCount,
+      timeSaved: analysisResults.timeSaved,
       metadata: {
         pageCount: documentData.numPages,
         wordCount: documentData.wordCount,
