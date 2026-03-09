@@ -39,6 +39,24 @@ const seedAdmin = async () => {
       console.log('Test user created: user@qcchecker.com / Welcome123!');
     }
 
+    const demoUserExists = await User.findOne({ email: 'demo@qcchecker.com' });
+    
+    if (!demoUserExists) {
+      const salt = await bcrypt.genSalt(10);
+      const hashedDemoPassword = await bcrypt.hash('Welcome123!', salt);
+      
+      await User.create({
+        name: 'Demo User',
+        email: 'demo@qcchecker.com',
+        password: hashedDemoPassword,
+        role: 'user',
+        status: 'active',
+        mustChangePassword: true,
+      });
+      
+      console.log('Demo user created: demo@qcchecker.com / Welcome123!');
+    }
+
   } catch (error) {
     console.error('Error seeding users:', error.message);
   }
