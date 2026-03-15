@@ -1,7 +1,13 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const { sendNewUserWelcomeEmail } = require('../services/emailService');
 const User = require('../models/User');
 
 const DEFAULT_PASSWORD = 'Welcome123!';
+
+const generateTemporaryPassword = () => {
+  return crypto.randomBytes(6).toString('base64').slice(0, 10) + '!';
+};
 
 const getUsers = async (req, res) => {
   try {
@@ -51,44 +57,55 @@ const getUserById = async (req, res) => {
 
 const createUser = async (req, res) => {
   try {
-    const { name, email, role, managedBy } = req.body;
+    const { name, email, role } = req.body;
 
     if (!name || !email) {
       return res.status(400).json({ message: 'Please provide name and email' });
     }
 
-    const userExists = await User.findOne({ email: email.toLowerCase() });
+    const allowedRoles = ['user', 'team_leader', 'admin'];
+
+    if (!role || !allowedRoles.includes(role)) {
+      return res.status(400).json({ message: 'Please provide a valid role' });
+    }
+
+
+    const normalizedEmail = email.toLowerCase();
+
+    const userExists = await User.findOne({ email: normalizedEmail });
     if (userExists) {
       return res.status(400).json({ message: 'User with this email already exists' });
     }
 
-    if (req.user.role === 'team_leader' && role && role !== 'user') {
-      return res.status(403).json({ message: 'Team leaders can only create users' });
-    }
-
-    if (role === 'admin' && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Only admins can create admin accounts' });
-    }
+    const tempPassword = generateTemporaryPassword();
 
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, salt);
+    const hashedPassword = await bcrypt.hash(tempPassword, salt);
 
-    const userData = {
+    const user = await User.create({
       name,
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       password: hashedPassword,
-      role: role || 'user',
+      role,
       status: 'active',
       mustChangePassword: true,
-    };
+    });
 
-    if (req.user.role === 'team_leader') {
-      userData.managedBy = req.user._id;
-    } else if (managedBy) {
-      userData.managedBy = managedBy;
+    const loginUrl = `${process.env.FRONTEND_URL}/login`;
+
+    let emailSent = true;
+    try {
+      await sendNewUserWelcomeEmail({
+        to: user.email,
+        tempPassword,
+        loginUrl,
+        role: user.role,
+        adminEmail: req.user.email,
+      });
+    } catch (emailError) {
+      emailSent = false;
+      console.error('Failed to send welcome email: ', emailError.message);
     }
-
-    const user = await User.create(userData);
 
     res.status(201).json({
       _id: user._id,
@@ -96,10 +113,13 @@ const createUser = async (req, res) => {
       email: user.email,
       role: user.role,
       status: user.status,
-      message: `User created with default password: ${DEFAULT_PASSWORD}`,
+      emailSent,
+      message: emailSent
+        ? 'User created and welcome email sent'
+        : 'User created but welcome email could not be sent',
     });
   } catch (error) {
-    console.error('Create user error:', error);
+    console.error('Create user error: ', error);
     res.status(500).json({ message: error.message });
   }
 };
