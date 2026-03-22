@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Report = require('../models/Report');
+const Team = require('../models/Team');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 
@@ -136,5 +137,43 @@ router.patch('/users/:id/status', protect, authorize('admin'), async (req, res) 
   }
 });
 
+// GET /api/admin/teams
+router.get('/teams', protect, authorize('admin'), async (req, res) => {
+  try {
+    const teams = await Team.find()
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(teams);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/teams
+router.post('/teams', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: 'Team name is required' });
+    }
+
+    const existing = await Team.findOne({ name: name.trim() });
+    if (existing) {
+      return res.status(409).json({ message: 'A team with that name already exists' });
+    }
+
+    const team = await Team.create({
+      name: name.trim(),
+      createdBy: req.user._id,
+    });
+
+    res.status(201).json(team);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;
