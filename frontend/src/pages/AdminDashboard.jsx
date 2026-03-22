@@ -140,7 +140,7 @@ const handleToggleStatus = async (userId, currentStatus) => {
 
         {/* Tab navigation */}
         <div className="flex border-b border-gray-200 mb-6">
-          {['Overview', 'Users', 'Reports', 'AI Training'].map(tab => (
+          {['Overview', 'Users', 'Reports', 'AI Training', 'Teams'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -414,6 +414,14 @@ const handleToggleStatus = async (userId, currentStatus) => {
         {activeTab === 'AI Training' && (
           <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-500">
             <p className="text-lg font-medium">AI Training</p>
+            <p className="text-sm mt-2">Coming soon</p>
+          </div>
+        )}
+
+        {/* Teams Tab */}
+        {activeTab === 'Teams' && (
+          <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-500">
+            <p className="text-lg font-medium">Teams</p>
             <p className="text-sm mt-2">Coming soon</p>
           </div>
         )}
