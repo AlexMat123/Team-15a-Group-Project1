@@ -27,6 +27,7 @@ const AdminDashboard = () => {
   const [newTeamName, setNewTeamName] = useState('');
   const [teamError, setTeamError] = useState('');
   const [teamCreating, setTeamCreating] = useState(false);
+  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
 
   // --- Fetch all admin data on mount ---
   useEffect(() => {
@@ -151,6 +152,7 @@ const handleCreateTeam = async (e) => {
     });
     setTeams(prev => [res.data, ...prev]);
     setNewTeamName('');
+    setShowCreateTeamModal(false);
   } catch (err) {
     setTeamError(err.response?.data?.message || 'Failed to create team');
   } finally {
@@ -450,59 +452,79 @@ const handleCreateTeam = async (e) => {
 
         {/* ── TEAMS TAB ── */}
         {activeTab === 'Teams' && (
-          <div className="space-y-6">
-            {/* Create team form */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Create a New Team</h2>
-              <form onSubmit={handleCreateTeam} className="flex items-center gap-3">
-                <input
-                  type="text"
-                  placeholder="Enter team name..."
-                  value={newTeamName}
-                  onChange={(e) => setNewTeamName(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-4 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-                <button
-                  type="submit"
-                  disabled={teamCreating}
-                  className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  {teamCreating ? 'Creating...' : 'Create Team'}
-                </button>
-              </form>
-              {teamError && (
-                <p className="text-red-500 text-sm mt-2">{teamError}</p>
-              )}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Teams</h2>
+              <button
+                onClick={() => { setTeamError(''); setNewTeamName(''); setShowCreateTeamModal(true); }}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
+              >
+                + Create Team
+              </button>
             </div>
 
-            {/* Teams list */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Existing Teams</h2>
-              {teams.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-4">No teams created yet.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-500 bg-gray-50">
-                      <th className="pb-3 pt-3 px-2">TEAM NAME</th>
-                      <th className="pb-3 pt-3 px-2">CREATED</th>
+            {teams.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-8">No teams created yet.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 bg-gray-50">
+                    <th className="pb-3 pt-3 px-2">TEAM NAME</th>
+                    <th className="pb-3 pt-3 px-2">CREATED</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teams.map(t => (
+                    <tr key={t._id} className="border-b last:border-0 hover:bg-gray-50">
+                      <td className="py-4 px-2 text-gray-900 font-medium">{t.name}</td>
+                      <td className="py-4 px-2 text-gray-500">
+                        {new Date(t.createdAt).toLocaleDateString('en-GB', {
+                          day: 'numeric', month: 'short', year: 'numeric'
+                        })}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {teams.map(t => (
-                      <tr key={t._id} className="border-b last:border-0 hover:bg-gray-50">
-                        <td className="py-4 px-2 text-gray-900 font-medium">{t.name}</td>
-                        <td className="py-4 px-2 text-gray-500">
-                          {new Date(t.createdAt).toLocaleDateString('en-GB', {
-                            day: 'numeric', month: 'short', year: 'numeric'
-                          })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {/* Create Team Modal */}
+            {showCreateTeamModal && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Create a New Team</h3>
+                  <form onSubmit={handleCreateTeam}>
+                    <input
+                      type="text"
+                      placeholder="Enter team name..."
+                      value={newTeamName}
+                      onChange={(e) => setNewTeamName(e.target.value)}
+                      autoFocus
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                    {teamError && (
+                      <p className="text-red-500 text-sm mb-3">{teamError}</p>
+                    )}
+                    <div className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateTeamModal(false)}
+                        className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={teamCreating}
+                        className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {teamCreating ? 'Creating...' : 'Create'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
