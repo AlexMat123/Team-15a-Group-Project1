@@ -52,6 +52,45 @@ You will be asked to change your password when you log in for the first time.
   });
 };
 
+const sendPasswordResetEmail = async ({
+  to,
+  tempPassword,
+  loginUrl,
+  adminEmail,
+}) => {
+  const subject = 'Your QC Checker password has been reset';
+
+  const text = `
+Your QC Checker password has been reset.
+
+Login email: ${to}
+Temporary password: ${tempPassword}
+Login link: ${loginUrl}
+Reply to: ${adminEmail}
+
+You will be asked to change your password when you log in.
+  `.trim();
+
+  const html = `
+    <p>Your <strong>QC Checker</strong> password has been reset.</p>
+    <p><strong>Login email:</strong> ${to}</p>
+    <p><strong>Temporary password:</strong> ${tempPassword}</p>
+    <p><strong>Login link:</strong> <a href="${loginUrl}">${loginUrl}</a></p>
+    <p><strong>Reply to:</strong> ${adminEmail}</p>
+    <p>You will be asked to change your password when you log in.</p>
+  `;
+
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM,
+    replyTo: adminEmail,
+    to,
+    subject,
+    text,
+    html,
+  });
+};
+
 module.exports = {
   sendNewUserWelcomeEmail,
+  sendPasswordResetEmail,
 };

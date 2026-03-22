@@ -1,9 +1,10 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { sendNewUserWelcomeEmail } = require('../services/emailService');
+const {
+  sendNewUserWelcomeEmail,
+  sendPasswordResetEmail,
+} = require('../services/emailService');
 const User = require('../models/User');
-
-const DEFAULT_PASSWORD = 'Welcome123!';
 
 const generateTemporaryPassword = () => {
   return crypto.randomBytes(6).toString('base64').slice(0, 10) + '!';
@@ -214,14 +215,33 @@ const resetUserPassword = async (req, res) => {
       }
     }
 
+    const tempPassword = generateTemporaryPassword();
     const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(DEFAULT_PASSWORD, salt);
+    user.password = await bcrypt.hash(tempPassword, salt);
     user.mustChangePassword = true;
     await user.save();
 
+    const loginUrl = `${process.env.FRONTEND_URL}/login`;
+    let emailSent = true;
+
+    try {
+      await sendPasswordResetEmail({
+        to: user.email,
+        tempPassword,
+        loginUrl,
+        adminEmail: req.user.email,
+      });
+    } catch (emailError) {
+      emailSent = false;
+      console.error('Failed to send password reset email:', emailError.message);
+    }
+
     res.json({ 
-      message: `Password reset to default: ${DEFAULT_PASSWORD}`,
-      mustChangePassword: true 
+      message: emailSent
+        ? 'Password reset successfully and reset email sent'
+        : 'Password reset successfully but reset email could not be sent',
+      mustChangePassword: true,
+      emailSent,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
