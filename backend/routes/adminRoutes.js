@@ -142,6 +142,7 @@ router.get('/teams', protect, authorize('admin'), async (req, res) => {
   try {
     const teams = await Team.find()
       .populate('createdBy', 'name email')
+      .populate('members', 'name email')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -171,6 +172,35 @@ router.post('/teams', protect, authorize('admin'), async (req, res) => {
     });
 
     res.status(201).json(team);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/admin/teams/:id/members
+router.patch('/teams/:id/members', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { memberIds } = req.body;
+
+    if (!Array.isArray(memberIds)) {
+      return res.status(400).json({ message: 'memberIds must be an array' });
+    }
+
+    const team = await Team.findById(req.params.id);
+    if (!team) return res.status(404).json({ message: 'Team not found' });
+
+    // Merge new members with existing, avoiding duplicates
+    const existingIds = team.members.map(id => id.toString());
+    const newIds = memberIds.filter(id => !existingIds.includes(id));
+    team.members.push(...newIds);
+    await team.save();
+
+    const updated = await Team.findById(team._id)
+      .populate('createdBy', 'name email')
+      .populate('members', 'name email')
+      .lean();
+
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

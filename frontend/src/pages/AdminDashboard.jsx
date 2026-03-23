@@ -29,6 +29,10 @@ const AdminDashboard = () => {
   const [teamCreating, setTeamCreating] = useState(false);
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
   const [manageTeamId, setManageTeamId] = useState(null);
+  const [showAddMembers, setShowAddMembers] = useState(false);
+  const [addMemberSearch, setAddMemberSearch] = useState('');
+  const [selectedMemberIds, setSelectedMemberIds] = useState([]);
+  const [addingMembers, setAddingMembers] = useState(false);
 
   // --- Fetch all admin data on mount ---
   useEffect(() => {
@@ -158,6 +162,37 @@ const handleCreateTeam = async (e) => {
     setTeamError(err.response?.data?.message || 'Failed to create team');
   } finally {
     setTeamCreating(false);
+  }
+};
+
+const handleOpenAddMembers = () => {
+  const team = teams.find(t => t._id === manageTeamId);
+  const existingIds = (team?.members || []).map(m => m._id || m);
+  setSelectedMemberIds(existingIds);
+  setAddMemberSearch('');
+  setShowAddMembers(true);
+};
+
+const toggleMemberSelection = (userId) => {
+  setSelectedMemberIds(prev =>
+    prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+  );
+};
+
+const handleAddMembers = async () => {
+  setAddingMembers(true);
+  try {
+    const token = localStorage.getItem('token');
+    const res = await axios.patch(`/api/admin/teams/${manageTeamId}/members`,
+      { memberIds: selectedMemberIds },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    setTeams(prev => prev.map(t => t._id === manageTeamId ? res.data : t));
+    setShowAddMembers(false);
+  } catch (err) {
+    alert(err.response?.data?.message || 'Failed to add members');
+  } finally {
+    setAddingMembers(false);
   }
 };
 
@@ -507,7 +542,7 @@ const handleCreateTeam = async (e) => {
                   </h3>
                   <p className="text-sm text-gray-500 mb-5">Choose an action for this team</p>
                   <div className="flex flex-col gap-2">
-                    <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                    <button onClick={handleOpenAddMembers} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                       Add Members
                     </button>
                     <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
@@ -529,6 +564,68 @@ const handleCreateTeam = async (e) => {
                   >
                     Close
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* Add Members Overlay */}
+            {showAddMembers && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Add Members</h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    {teams.find(t => t._id === manageTeamId)?.name}
+                  </p>
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    value={addMemberSearch}
+                    onChange={(e) => setAddMemberSearch(e.target.value)}
+                    autoFocus
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                  <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                    {users
+                      .filter(u =>
+                        u.name?.toLowerCase().includes(addMemberSearch.toLowerCase()) ||
+                        u.email?.toLowerCase().includes(addMemberSearch.toLowerCase())
+                      )
+                      .map(u => {
+                        const isSelected = selectedMemberIds.includes(u._id);
+                        return (
+                          <label
+                            key={u._id}
+                            className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleMemberSelection(u._id)}
+                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                              <p className="text-xs text-gray-500">{u.email}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                  </div>
+                  <div className="flex justify-between items-center mt-4">
+                    <button
+                      onClick={() => setShowAddMembers(false)}
+                      className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleAddMembers}
+                      disabled={addingMembers}
+                      className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {addingMembers ? 'Adding...' : 'Add'}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
