@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import ReportDetail from './pages/ReportDetail';
 import AdminDashboard from './pages/AdminDashboard';
 import Unauthorized from './pages/Unauthorized';
+import Profile from './pages/Profile'; 
 
 function App() {
   return (
@@ -47,6 +48,15 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['admin', 'team_leader']}>
                 <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile/>
               </ProtectedRoute>
             }
           />
