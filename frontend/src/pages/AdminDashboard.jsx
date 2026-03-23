@@ -9,6 +9,17 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -18,7 +29,11 @@ const tabs = [
   { id: 'overview', label: 'Overview' },
   { id: 'users', label: 'Users' },
   { id: 'manage', label: 'Manage' },
+  { id: 'reports', label: 'Reports' },
+  { id: 'training', label: 'AI Training' },
 ];
+
+const COLORS = ['#6366f1', '#f59e0b', '#ef4444', '#10b981', '#3b82f6'];
 
 const formatDate = (value) => {
   if (!value) {
@@ -32,6 +47,24 @@ const formatDate = (value) => {
   });
 };
 
+const getStatusOutlineClass = (status) => {
+  const normalizedStatus = String(status || '').toLowerCase();
+
+  if (normalizedStatus.includes('pending')) {
+    return 'border-orange-400 text-orange-700';
+  }
+
+  if (normalizedStatus === 'active') {
+    return 'border-green-400 text-green-700';
+  }
+
+  if (normalizedStatus.includes('inactive')) {
+    return 'border-red-400 text-red-700';
+  }
+
+  return 'border-gray-300 text-gray-700';
+};
+
 const AdminDashboard = () => {
   const { user } = useAuth();
 
@@ -42,8 +75,12 @@ const AdminDashboard = () => {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('user');
   const [searchTerm, setSearchTerm] = useState('');
+  const [reportSearch, setReportSearch] = useState('');
+  const [openTrainingMenu, setOpenTrainingMenu] = useState(null);
   const [users, setUsers] = useState([]);
+  const [reports, setReports] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [loadingReports, setLoadingReports] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [resettingUserId, setResettingUserId] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -53,6 +90,22 @@ const AdminDashboard = () => {
   const [deletingUserId, setDeletingUserId] = useState('');
   const [passwordResetRequests, setPasswordResetRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
+  const [reportsError, setReportsError] = useState('');
+  const [dashboardStats, setDashboardStats] = useState({
+    totalReports: 0,
+    totalErrors: 0,
+    timeSaved: 0,
+    manualTime: 0,
+    aiTime: 0,
+    timeSavedPercent: 0,
+    errorBreakdown: [
+      { name: 'Placeholder', value: 0 },
+      { name: 'Consistency', value: 0 },
+      { name: 'Compliance', value: 0 },
+      { name: 'Formatting', value: 0 },
+      { name: 'Missing Data', value: 0 },
+    ],
+  });
 
 
   const fetchUsers = async () => {
@@ -91,16 +144,101 @@ const AdminDashboard = () => {
     }
   };
 
+  const mapReportStats = (statsData) => {
+    const totalReports = statsData?.totalReports || 0;
+    const totalErrors = statsData?.totalErrors || 0;
+    const timeSaved = Math.round(statsData?.totalTimeSaved || statsData?.timeSaved || 0);
+    const manualTime = Number((timeSaved / 0.16).toFixed(1));
+    const aiTime = Math.max(0, Math.round(manualTime - timeSaved));
+    const timeSavedPercent = manualTime > 0 ? Math.round((timeSaved / manualTime) * 100) : 0;
+
+    return {
+      totalReports,
+      totalErrors,
+      timeSaved,
+      manualTime,
+      aiTime,
+      timeSavedPercent,
+      errorBreakdown: [
+        { name: 'Placeholder', value: statsData?.placeholderErrors || 0 },
+        { name: 'Consistency', value: statsData?.consistencyErrors || 0 },
+        { name: 'Compliance', value: statsData?.complianceErrors || 0 },
+        { name: 'Formatting', value: statsData?.formattingErrors || 0 },
+        { name: 'Missing Data', value: statsData?.missingDataErrors || 0 },
+      ],
+    };
+  };
+
+  const fetchDashboardData = async () => {
+    setLoadingReports(true);
+
+    try {
+      const [statsResponse, reportsResponse] = await Promise.all([
+        api.get('/admin/stats'),
+        api.get('/admin/reports'),
+      ]);
+
+      setDashboardStats({
+        ...mapReportStats({
+          totalReports: statsResponse.data?.totalReports,
+          totalErrors: statsResponse.data?.totalErrors,
+          timeSaved: statsResponse.data?.timeSaved,
+          placeholderErrors: statsResponse.data?.errorBreakdown?.find((e) => e.name === 'Placeholder')?.value || 0,
+          consistencyErrors: statsResponse.data?.errorBreakdown?.find((e) => e.name === 'Consistency')?.value || 0,
+          complianceErrors: statsResponse.data?.errorBreakdown?.find((e) => e.name === 'Compliance')?.value || 0,
+          formattingErrors: statsResponse.data?.errorBreakdown?.find((e) => e.name === 'Formatting')?.value || 0,
+          missingDataErrors: statsResponse.data?.errorBreakdown?.find((e) => e.name === 'Missing Data')?.value || 0,
+          totalTimeSaved: statsResponse.data?.timeSaved,
+        }),
+        manualTime: statsResponse.data?.manualTime || 0,
+        aiTime: statsResponse.data?.aiTime || 0,
+        timeSavedPercent: statsResponse.data?.timeSavedPercent || 0,
+        errorBreakdown: statsResponse.data?.errorBreakdown || [],
+      });
+      setReports(reportsResponse.data || []);
+      setReportsError('');
+    } catch (adminError) {
+      try {
+        const [statsResponse, reportsResponse] = await Promise.all([
+          api.get('/reports/stats'),
+          api.get('/reports'),
+        ]);
+
+        setDashboardStats(mapReportStats(statsResponse.data));
+        setReports(reportsResponse.data || []);
+        setReportsError('');
+      } catch (fallbackError) {
+        setReportsError(
+          fallbackError.response?.data?.message || 'Failed to load report analytics'
+        );
+      }
+    } finally {
+      setLoadingReports(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchPasswordResetRequest();
+    fetchDashboardData();
   }, []);
 
   const stats = [
     { label: 'Total Users', value: users.length, icon: Users, color: 'bg-blue-500' },
-    { label: 'Reports Analyzed', value: '0', icon: FileText, color: 'bg-green-500' },
-    { label: 'Total Errors Found', value: '0', icon: AlertTriangle, color: 'bg-red-500' },
-    { label: 'Time Saved', value: '0h', icon: Clock, color: 'bg-amber-500' },
+    { label: 'Reports Analyzed', value: dashboardStats.totalReports, icon: FileText, color: 'bg-green-500' },
+    { label: 'Total Errors Found', value: dashboardStats.totalErrors, icon: AlertTriangle, color: 'bg-red-500' },
+    { label: 'Time Saved', value: `${dashboardStats.timeSaved}h`, icon: Clock, color: 'bg-amber-500' },
+  ];
+
+  const barData = dashboardStats.errorBreakdown.map((entry) => ({
+    name: entry.name,
+    errors: entry.value,
+  }));
+
+  const timeSavingsCards = [
+    { label: 'Manual Review Time', value: `${dashboardStats.manualTime}h`, bg: 'bg-purple-100', text: 'text-indigo-600' },
+    { label: 'AI Review Time', value: `${dashboardStats.aiTime}h`, bg: 'bg-green-100', text: 'text-green-600' },
+    { label: 'Time Saved', value: `${dashboardStats.timeSavedPercent}%`, bg: 'bg-purple-100', text: 'text-purple-600' },
   ];
 
   const filteredUsers = users.filter((entry) => {
@@ -114,6 +252,19 @@ const AdminDashboard = () => {
       entry.name?.toLowerCase().includes(query) ||
       entry.email?.toLowerCase().includes(query) ||
       entry.role?.toLowerCase().includes(query)
+    );
+  });
+
+  const filteredReports = reports.filter((report) => {
+    const query = reportSearch.trim().toLowerCase();
+
+    if (!query) {
+      return true;
+    }
+
+    return (
+      report.filename?.toLowerCase().includes(query) ||
+      report.analyzedBy?.name?.toLowerCase().includes(query)
     );
   });
 
@@ -219,6 +370,22 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleAddToTraining = async (reportId, label) => {
+    try {
+      await api.patch(`/admin/reports/${reportId}/training`, { trainingLabel: label });
+      setReports((prev) =>
+        prev.map((entry) =>
+          entry._id === reportId
+            ? { ...entry, addedToTraining: true, trainingLabel: label }
+            : entry
+        )
+      );
+      setOpenTrainingMenu(null);
+    } catch (error) {
+      setReportsError(error.response?.data?.message || 'Failed to add report to training');
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
@@ -286,6 +453,56 @@ const AdminDashboard = () => {
                 </div>
               ))}
             </div>
+
+            {loadingReports ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 mb-8 text-sm text-gray-500">
+                Loading analytics...
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Most Common Errors</h2>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={barData}>
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="errors" fill="#6366f1" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Error Type Distribution</h2>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie data={dashboardStats.errorBreakdown} dataKey="value" nameKey="name" outerRadius={80}>
+                          {dashboardStats.errorBreakdown.map((_, index) => (
+                            <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Time Savings Analysis</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {timeSavingsCards.map((item) => (
+                      <div key={item.label} className={`${item.bg} rounded-lg p-6 text-center`}>
+                        <p className={`text-3xl font-bold ${item.text}`}>{item.value}</p>
+                        <p className="text-sm text-gray-500 mt-1">{item.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {reportsError && <p className="mb-4 text-sm text-red-600">{reportsError}</p>}
 
             {successMessage && (
               <div className="bg-white rounded-xl shadow-sm p-6">
@@ -447,7 +664,15 @@ const AdminDashboard = () => {
                             <td className="px-4 py-5 capitalize text-gray-600">
                               {entry.role?.replace('_', ' ')}
                             </td>
-                            <td className="px-4 py-5 text-gray-600">{entry.status}</td>
+                            <td className="px-4 py-5">
+                              <span
+                                className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold capitalize ${getStatusOutlineClass(
+                                  entry.status
+                                )}`}
+                              >
+                                {entry.status || 'unknown'}
+                              </span>
+                            </td>
                             <td className="px-4 py-5">
                               <button
                                 type="button"
@@ -522,8 +747,14 @@ const AdminDashboard = () => {
                               <td className="px-4 py-5 text-gray-600">
                                 {formatDate(request.requestedAt)}
                               </td>
-                              <td className="px-4 py-5 capitalize text-gray-600">
-                                {request.status}
+                              <td className="px-4 py-5">
+                                <span
+                                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold capitalize ${getStatusOutlineClass(
+                                    request.status
+                                  )}`}
+                                >
+                                  {request.status || 'unknown'}
+                                </span>
                               </td>
                               <td className="px-4 py-5">
                                 <button
@@ -559,6 +790,114 @@ const AdminDashboard = () => {
                 )}
               </div>
             )}
+          </section>
+        )}
+
+        {activeTab === 'reports' && (
+          <section>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Analysed Reports</h2>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search reports..."
+                  value={reportSearch}
+                  onChange={(e) => setReportSearch(e.target.value)}
+                  className="border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            {reportsError && <p className="mb-4 text-sm text-red-600">{reportsError}</p>}
+
+            {loadingReports ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-sm text-gray-500">
+                Loading reports...
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredReports.map((report) => (
+                  <div key={report._id} className="bg-white rounded-xl border border-gray-200 p-6 hover:border-indigo-400 transition-colors">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-indigo-600 text-lg">📄</span>
+                          <p className="font-bold text-gray-900 text-base">{report.filename}</p>
+                        </div>
+                        <p className="text-sm text-gray-500 mb-1">
+                          Analyzed by <span className="font-semibold text-gray-700">{report.analyzedBy?.name ?? 'Unknown'}</span> on{' '}
+                          {formatDate(report.analyzedAt || report.createdAt)}
+                        </p>
+                        <p className="text-sm mb-3">
+                          <span className="text-red-500 font-medium">{report.errorCount || 0} errors found</span>
+                          <span className="text-gray-400 mx-2">•</span>
+                          <span className="text-green-600 font-medium">{report.timeSaved || 0} hours saved</span>
+                        </p>
+
+                        {report.errors?.length > 0 && (
+                          <div className="border-t border-gray-100 pt-3">
+                            <p className="text-xs font-semibold text-gray-600 mb-2">Errors Detected:</p>
+                            <div className="space-y-1">
+                              {report.errors.map((error, index) => (
+                                <div key={error._id || index} className="flex items-center gap-3">
+                                  <span className="text-xs px-2 py-0.5 rounded font-medium min-w-[80px] text-center bg-gray-100 text-gray-700">
+                                    {error.type}
+                                  </span>
+                                  <span className="text-sm text-gray-600">{error.message}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {user?.role === 'admin' && (
+                        <div className="relative ml-4">
+                          <button
+                            onClick={() => setOpenTrainingMenu(openTrainingMenu === report._id ? null : report._id)}
+                            className={`text-sm border rounded-lg px-3 py-1.5 whitespace-nowrap ${
+                              report.addedToTraining
+                                ? 'text-green-600 border-green-200 bg-green-50 hover:bg-green-100'
+                                : 'text-indigo-600 border-indigo-200 bg-indigo-50 hover:bg-indigo-100'
+                            }`}
+                          >
+                            {report.addedToTraining
+                              ? `✓ ${report.trainingLabel === 'good' ? 'Good' : 'Bad'} Example`
+                              : '+ Add to Training'}
+                          </button>
+
+                          {openTrainingMenu === report._id && (
+                            <div className="absolute right-0 top-10 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-10 w-52">
+                              <p className="text-xs font-semibold text-gray-600 mb-2">Add as training example:</p>
+                              <button
+                                onClick={() => handleAddToTraining(report._id, 'good')}
+                                className="w-full text-left text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded px-3 py-2 mb-1"
+                              >
+                                ✓ Good Example
+                              </button>
+                              <button
+                                onClick={() => handleAddToTraining(report._id, 'bad')}
+                                className="w-full text-left text-sm font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded px-3 py-2"
+                              >
+                                ✗ Bad Example
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {activeTab === 'training' && (
+          <section className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-500">
+            <p className="text-lg font-medium">AI Training</p>
+            <p className="text-sm mt-2">Use the Reports tab to add training examples.</p>
           </section>
         )}
       </main>
