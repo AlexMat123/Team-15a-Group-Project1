@@ -33,6 +33,7 @@ const AdminDashboard = () => {
   const [addMemberSearch, setAddMemberSearch] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState([]);
   const [addingMembers, setAddingMembers] = useState(false);
+  const [showViewMembers, setShowViewMembers] = useState(false);
 
   // --- Fetch all admin data on mount ---
   useEffect(() => {
@@ -548,7 +549,7 @@ const handleAddMembers = async () => {
                     <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                       Remove Members
                     </button>
-                    <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                    <button onClick={() => setShowViewMembers(true)} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                       View Members
                     </button>
                     <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
@@ -629,6 +630,43 @@ const handleAddMembers = async () => {
                 </div>
               </div>
             )}
+
+            {/* View Members Overlay */}
+            {showViewMembers && manageTeamId && (() => {
+              const team = teams.find(t => t._id === manageTeamId);
+              const members = team?.members || [];
+              return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                  <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Team Members</h3>
+                    <p className="text-sm text-gray-500 mb-4">{team?.name}</p>
+                    {members.length === 0 ? (
+                      <p className="text-gray-400 text-sm text-center py-8">No members in this team yet.</p>
+                    ) : (
+                      <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                        {members.map(m => (
+                          <div key={m._id} className="flex items-center gap-3 px-4 py-3">
+                            <div className="bg-indigo-100 text-indigo-600 rounded-full h-8 w-8 flex items-center justify-center text-sm font-semibold">
+                              {m.name?.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{m.name}</p>
+                              <p className="text-xs text-gray-500">{m.email}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setShowViewMembers(false)}
+                      className="mt-4 px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Back
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Create Team Modal */}
             {showCreateTeamModal && (
