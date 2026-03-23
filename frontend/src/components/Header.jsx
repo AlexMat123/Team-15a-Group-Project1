@@ -20,6 +20,14 @@ const Header = () => {
                 <span className="text-sm text-gray-600">
                   Welcome, {user?.name}
                 </span>
+                {user?.team && (
+                  <Link
+                    to="/team"
+                    className="text-sm text-indigo-600 hover:text-indigo-700"
+                  >
+                    My Team
+                  </Link>
+                )}
                 {(user?.role === 'admin' || user?.role === 'team_leader') && (
                   <Link
                     to="/admin"
