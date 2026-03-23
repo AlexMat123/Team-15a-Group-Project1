@@ -38,6 +38,7 @@ const AdminDashboard = () => {
   const [showAssignLead, setShowAssignLead] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState(null);
   const [confirmLead, setConfirmLead] = useState(null);
+  const [confirmDeleteTeam, setConfirmDeleteTeam] = useState(false);
 
   // --- Fetch all admin data on mount ---
   useEffect(() => {
@@ -233,6 +234,20 @@ const handleConfirmAssignLead = async () => {
     setShowAssignLead(false);
   } catch (err) {
     alert(err.response?.data?.message || 'Failed to assign team lead');
+  }
+};
+
+const handleDeleteTeam = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    await axios.delete(`/api/admin/teams/${manageTeamId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    setTeams(prev => prev.filter(t => t._id !== manageTeamId));
+    setConfirmDeleteTeam(false);
+    setManageTeamId(null);
+  } catch (err) {
+    alert(err.response?.data?.message || 'Failed to delete team');
   }
 };
 
@@ -597,7 +612,7 @@ const handleConfirmAssignLead = async () => {
                     <button onClick={handleOpenAssignLead} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                       Assign Team Lead
                     </button>
-                    <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                    <button onClick={() => setConfirmDeleteTeam(true)} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                       Delete Team
                     </button>
                   </div>
@@ -608,6 +623,32 @@ const handleConfirmAssignLead = async () => {
                     Close
                   </button>
                 </div>
+
+                {/* Confirm Delete Team */}
+                {confirmDeleteTeam && (
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                    <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Team</h3>
+                      <p className="text-sm text-gray-600 mb-5">
+                        Are you sure you want to delete <span className="font-semibold">{teams.find(t => t._id === manageTeamId)?.name}</span>? This will remove the team and all its member associations. This action cannot be undone.
+                      </p>
+                      <div className="flex justify-end gap-3">
+                        <button
+                          onClick={() => setConfirmDeleteTeam(false)}
+                          className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleDeleteTeam}
+                          className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

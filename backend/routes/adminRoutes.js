@@ -270,4 +270,23 @@ router.patch('/teams/:id/lead', protect, authorize('admin'), async (req, res) =>
   }
 });
 
+// DELETE /api/admin/teams/:id
+router.delete('/teams/:id', protect, authorize('admin'), async (req, res) => {
+  try {
+    const team = await Team.findById(req.params.id);
+    if (!team) return res.status(404).json({ message: 'Team not found' });
+
+    // Revert team lead role back to 'user'
+    if (team.teamLead) {
+      await User.findByIdAndUpdate(team.teamLead, { role: 'user' });
+    }
+
+    await team.deleteOne();
+
+    res.json({ message: 'Team deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
