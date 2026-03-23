@@ -142,7 +142,8 @@ router.get('/teams', protect, authorize('admin'), async (req, res) => {
   try {
     const teams = await Team.find()
       .populate('createdBy', 'name email')
-      .populate('members', 'name email')
+      .populate('members', 'name email role')
+      .populate('teamLead', 'name email')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -197,7 +198,8 @@ router.patch('/teams/:id/members', protect, authorize('admin'), async (req, res)
 
     const updated = await Team.findById(team._id)
       .populate('createdBy', 'name email')
-      .populate('members', 'name email')
+      .populate('members', 'name email role')
+      .populate('teamLead', 'name email')
       .lean();
 
     res.json(updated);
@@ -213,11 +215,53 @@ router.delete('/teams/:id/members/:userId', protect, authorize('admin'), async (
     if (!team) return res.status(404).json({ message: 'Team not found' });
 
     team.members = team.members.filter(m => m.toString() !== req.params.userId);
+
+    // Clear teamLead if the removed member was the lead and revert their role
+    if (team.teamLead && team.teamLead.toString() === req.params.userId) {
+      await User.findByIdAndUpdate(req.params.userId, { role: 'user' });
+      team.teamLead = null;
+    }
+
     await team.save();
 
     const updated = await Team.findById(team._id)
       .populate('createdBy', 'name email')
-      .populate('members', 'name email')
+      .populate('members', 'name email role')
+      .populate('teamLead', 'name email')
+      .lean();
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/admin/teams/:id/lead
+router.patch('/teams/:id/lead', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const team = await Team.findById(req.params.id);
+    if (!team) return res.status(404).json({ message: 'Team not found' });
+
+    if (!team.members.map(m => m.toString()).includes(userId)) {
+      return res.status(400).json({ message: 'User must be a member of the team' });
+    }
+
+    // Revert previous lead back to 'user' role
+    if (team.teamLead && team.teamLead.toString() !== userId) {
+      await User.findByIdAndUpdate(team.teamLead, { role: 'user' });
+    }
+
+    // Set new lead's role to 'team_leader'
+    await User.findByIdAndUpdate(userId, { role: 'team_leader' });
+
+    team.teamLead = userId;
+    await team.save();
+
+    const updated = await Team.findById(team._id)
+      .populate('createdBy', 'name email')
+      .populate('members', 'name email role')
+      .populate('teamLead', 'name email')
       .lean();
 
     res.json(updated);

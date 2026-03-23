@@ -35,6 +35,9 @@ const AdminDashboard = () => {
   const [addingMembers, setAddingMembers] = useState(false);
   const [showViewMembers, setShowViewMembers] = useState(false);
   const [confirmRemoveMember, setConfirmRemoveMember] = useState(null);
+  const [showAssignLead, setShowAssignLead] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState(null);
+  const [confirmLead, setConfirmLead] = useState(null);
 
   // --- Fetch all admin data on mount ---
   useEffect(() => {
@@ -208,6 +211,28 @@ const handleRemoveMember = async (userId) => {
     setConfirmRemoveMember(null);
   } catch (err) {
     alert(err.response?.data?.message || 'Failed to remove member');
+  }
+};
+
+const handleOpenAssignLead = () => {
+  const team = teams.find(t => t._id === manageTeamId);
+  setSelectedLeadId(team?.teamLead?._id || null);
+  setConfirmLead(null);
+  setShowAssignLead(true);
+};
+
+const handleConfirmAssignLead = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const res = await axios.patch(`/api/admin/teams/${manageTeamId}/lead`,
+      { userId: confirmLead._id },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    setTeams(prev => prev.map(t => t._id === manageTeamId ? res.data : t));
+    setConfirmLead(null);
+    setShowAssignLead(false);
+  } catch (err) {
+    alert(err.response?.data?.message || 'Failed to assign team lead');
   }
 };
 
@@ -522,6 +547,7 @@ const handleRemoveMember = async (userId) => {
                   <tr className="text-left text-gray-500 bg-gray-50">
                     <th className="pb-3 pt-3 px-2">TEAM NAME</th>
                     <th className="pb-3 pt-3 px-2">CREATED</th>
+                    <th className="pb-3 pt-3 px-2">WARNING</th>
                     <th className="pb-3 pt-3 px-2">ACTIONS</th>
                   </tr>
                 </thead>
@@ -533,6 +559,11 @@ const handleRemoveMember = async (userId) => {
                         {new Date(t.createdAt).toLocaleDateString('en-GB', {
                           day: 'numeric', month: 'short', year: 'numeric'
                         })}
+                      </td>
+                      <td className="py-4 px-2">
+                        {!t.teamLead && (
+                          <span className="text-xs text-red-500 font-medium">No team lead assigned</span>
+                        )}
                       </td>
                       <td className="py-4 px-2">
                         <button
@@ -563,7 +594,7 @@ const handleRemoveMember = async (userId) => {
                     <button onClick={() => setShowViewMembers(true)} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                       View Members
                     </button>
-                    <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                    <button onClick={handleOpenAssignLead} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                       Assign Team Lead
                     </button>
                     <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
@@ -664,6 +695,13 @@ const handleRemoveMember = async (userId) => {
                               <p className="text-sm font-medium text-gray-900">{m.name}</p>
                               <p className="text-xs text-gray-500">{m.email}</p>
                             </div>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                              m.role === 'team_leader'
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {m.role === 'team_leader' ? 'Team Leader' : 'User'}
+                            </span>
                             <button
                               onClick={() => setConfirmRemoveMember(m)}
                               className="text-xs text-red-500 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50"
@@ -702,6 +740,100 @@ const handleRemoveMember = async (userId) => {
                             className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
                           >
                             Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Assign Team Lead Overlay */}
+            {showAssignLead && manageTeamId && (() => {
+              const team = teams.find(t => t._id === manageTeamId);
+              const members = team?.members || [];
+              return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                  <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Assign Team Lead</h3>
+                    <p className="text-sm text-gray-500 mb-4">{team?.name}</p>
+                    {members.length === 0 ? (
+                      <p className="text-gray-400 text-sm text-center py-8">No members in this team. Add members first.</p>
+                    ) : (
+                      <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                        {members.map(m => {
+                          const isSelected = selectedLeadId === m._id;
+                          const isCurrentLead = team?.teamLead?._id === m._id;
+                          return (
+                            <label
+                              key={m._id}
+                              className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-indigo-50' : ''}`}
+                            >
+                              <input
+                                type="radio"
+                                name="teamLead"
+                                checked={isSelected}
+                                onChange={() => setSelectedLeadId(m._id)}
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <div className="bg-indigo-100 text-indigo-600 rounded-full h-8 w-8 flex items-center justify-center text-sm font-semibold">
+                                {m.name?.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900">{m.name}</p>
+                                <p className="text-xs text-gray-500">{m.email}</p>
+                              </div>
+                              {isCurrentLead && (
+                                <span className="text-xs text-indigo-600 font-medium bg-indigo-100 px-2 py-0.5 rounded-full">Current Lead</span>
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center mt-4">
+                      <button
+                        onClick={() => setShowAssignLead(false)}
+                        className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                      >
+                        Back
+                      </button>
+                      {members.length > 0 && (
+                        <button
+                          onClick={() => {
+                            const member = members.find(m => m._id === selectedLeadId);
+                            if (!member) return alert('Please select a member');
+                            setConfirmLead(member);
+                          }}
+                          className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
+                        >
+                          Assign
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Confirm Assign Lead */}
+                  {confirmLead && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
+                      <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Team Lead</h3>
+                        <p className="text-sm text-gray-600 mb-5">
+                          Are you sure you want to assign <span className="font-semibold">{confirmLead.name}</span> as the team lead for <span className="font-semibold">{team?.name}</span>?
+                        </p>
+                        <div className="flex justify-end gap-3">
+                          <button
+                            onClick={() => setConfirmLead(null)}
+                            className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleConfirmAssignLead}
+                            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                          >
+                            Confirm
                           </button>
                         </div>
                       </div>
