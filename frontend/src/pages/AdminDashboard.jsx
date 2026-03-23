@@ -28,6 +28,7 @@ const AdminDashboard = () => {
   const [teamError, setTeamError] = useState('');
   const [teamCreating, setTeamCreating] = useState(false);
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
+  const [manageTeamId, setManageTeamId] = useState(null);
 
   // --- Fetch all admin data on mount ---
   useEffect(() => {
@@ -471,6 +472,7 @@ const handleCreateTeam = async (e) => {
                   <tr className="text-left text-gray-500 bg-gray-50">
                     <th className="pb-3 pt-3 px-2">TEAM NAME</th>
                     <th className="pb-3 pt-3 px-2">CREATED</th>
+                    <th className="pb-3 pt-3 px-2">ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -482,10 +484,53 @@ const handleCreateTeam = async (e) => {
                           day: 'numeric', month: 'short', year: 'numeric'
                         })}
                       </td>
+                      <td className="py-4 px-2">
+                        <button
+                          onClick={() => setManageTeamId(manageTeamId === t._id ? null : t._id)}
+                          className="text-sm text-indigo-600 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50"
+                        >
+                          Manage Team
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            )}
+
+            {/* Manage Team Modal */}
+            {manageTeamId && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    {teams.find(t => t._id === manageTeamId)?.name}
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-5">Choose an action for this team</p>
+                  <div className="flex flex-col gap-2">
+                    <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                      Add Members
+                    </button>
+                    <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                      Remove Members
+                    </button>
+                    <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                      View Members
+                    </button>
+                    <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                      Assign Team Lead
+                    </button>
+                    <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                      Delete Team
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setManageTeamId(null)}
+                    className="mt-4 w-full text-sm text-gray-600 border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* Create Team Modal */}
