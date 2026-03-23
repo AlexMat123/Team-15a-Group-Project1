@@ -289,4 +289,43 @@ router.delete('/teams/:id', protect, authorize('admin'), async (req, res) => {
   }
 });
 
+// GET /api/admin/teams/:id/stats
+router.get('/teams/:id/stats', protect, authorize('admin'), async (req, res) => {
+  try {
+    const team = await Team.findById(req.params.id);
+    if (!team) return res.status(404).json({ message: 'Team not found' });
+
+    const memberIds = team.members.map(m => m.toString());
+    const reports = await Report.find({ analyzedBy: { $in: memberIds } });
+
+    const totalReports = reports.length;
+    const totalErrors = reports.reduce((sum, r) => sum + (r.errorCount || 0), 0);
+    const totalTimeSaved = reports.reduce((sum, r) => sum + (r.timeSaved || 0), 0);
+
+    const errorBreakdown = [
+      { name: 'Placeholder', value: reports.reduce((sum, r) => sum + (r.errorSummary?.placeholder || 0), 0) },
+      { name: 'Consistency', value: reports.reduce((sum, r) => sum + (r.errorSummary?.consistency || 0), 0) },
+      { name: 'Compliance', value: reports.reduce((sum, r) => sum + (r.errorSummary?.compliance || 0), 0) },
+      { name: 'Formatting', value: reports.reduce((sum, r) => sum + (r.errorSummary?.formatting || 0), 0) },
+      { name: 'Missing Data', value: reports.reduce((sum, r) => sum + (r.errorSummary?.missing_data || 0), 0) },
+    ];
+
+    const manualTime = parseFloat((totalTimeSaved / 0.16).toFixed(1));
+    const timeSavedPercent = manualTime > 0 ? Math.round((totalTimeSaved / manualTime) * 100) : 0;
+
+    res.json({
+      totalMembers: memberIds.length,
+      totalReports,
+      totalErrors,
+      timeSaved: Math.round(totalTimeSaved),
+      manualTime,
+      aiTime: Math.round(manualTime - totalTimeSaved),
+      timeSavedPercent,
+      errorBreakdown,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

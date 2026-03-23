@@ -39,6 +39,9 @@ const AdminDashboard = () => {
   const [selectedLeadId, setSelectedLeadId] = useState(null);
   const [confirmLead, setConfirmLead] = useState(null);
   const [confirmDeleteTeam, setConfirmDeleteTeam] = useState(false);
+  const [showTeamAnalytics, setShowTeamAnalytics] = useState(false);
+  const [teamStats, setTeamStats] = useState(null);
+  const [teamStatsLoading, setTeamStatsLoading] = useState(false);
 
   // --- Fetch all admin data on mount ---
   useEffect(() => {
@@ -234,6 +237,23 @@ const handleConfirmAssignLead = async () => {
     setShowAssignLead(false);
   } catch (err) {
     alert(err.response?.data?.message || 'Failed to assign team lead');
+  }
+};
+
+const handleOpenTeamAnalytics = async () => {
+  setTeamStatsLoading(true);
+  setShowTeamAnalytics(true);
+  try {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(`/api/admin/teams/${manageTeamId}/stats`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    setTeamStats(res.data);
+  } catch (err) {
+    alert(err.response?.data?.message || 'Failed to load team analytics');
+    setShowTeamAnalytics(false);
+  } finally {
+    setTeamStatsLoading(false);
   }
 };
 
@@ -612,6 +632,9 @@ const handleDeleteTeam = async () => {
                     <button onClick={handleOpenAssignLead} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                       Assign Team Lead
                     </button>
+                    <button onClick={handleOpenTeamAnalytics} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                      View Analytics
+                    </button>
                     <button onClick={() => setConfirmDeleteTeam(true)} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                       Delete Team
                     </button>
@@ -883,6 +906,122 @@ const handleDeleteTeam = async () => {
                 </div>
               );
             })()}
+
+            {/* Team Analytics Overlay */}
+            {showTeamAnalytics && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Team Analytics</h3>
+                  <p className="text-sm text-gray-500 mb-5">{teams.find(t => t._id === manageTeamId)?.name}</p>
+
+                  {teamStatsLoading ? (
+                    <p className="text-gray-400 text-sm text-center py-8 animate-pulse">Loading analytics...</p>
+                  ) : teamStats ? (
+                    <>
+                      {/* Stat cards */}
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                          <div className="flex items-center">
+                            <div className="bg-blue-500 p-2.5 rounded-lg">
+                              <Users className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-xl font-bold text-gray-900">{teamStats.totalMembers}</p>
+                              <p className="text-xs text-gray-500">Members</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                          <div className="flex items-center">
+                            <div className="bg-green-500 p-2.5 rounded-lg">
+                              <FileText className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-xl font-bold text-gray-900">{teamStats.totalReports}</p>
+                              <p className="text-xs text-gray-500">Reports</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                          <div className="flex items-center">
+                            <div className="bg-red-500 p-2.5 rounded-lg">
+                              <AlertTriangle className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-xl font-bold text-gray-900">{teamStats.totalErrors}</p>
+                              <p className="text-xs text-gray-500">Errors Found</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                          <div className="flex items-center">
+                            <div className="bg-amber-500 p-2.5 rounded-lg">
+                              <Clock className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-xl font-bold text-gray-900">{teamStats.timeSaved}h</p>
+                              <p className="text-xs text-gray-500">Time Saved</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Charts */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div className="border border-gray-200 rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Most Common Errors</h4>
+                          <ResponsiveContainer width="100%" height={180}>
+                            <BarChart data={teamStats.errorBreakdown.map(e => ({ name: e.name, errors: e.value }))}>
+                              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                              <YAxis />
+                              <Tooltip />
+                              <Bar dataKey="errors" fill="#6366f1" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="border border-gray-200 rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Error Type Distribution</h4>
+                          <ResponsiveContainer width="100%" height={180}>
+                            <PieChart>
+                              <Pie data={teamStats.errorBreakdown} dataKey="value" nameKey="name" outerRadius={65} label={({ name, value }) => `${name}: ${value}`}>
+                                {teamStats.errorBreakdown.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                              </Pie>
+                              <Tooltip />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Time savings */}
+                      <div className="border border-gray-200 rounded-xl p-4">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Time Savings Analysis</h4>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="bg-purple-100 rounded-lg p-4 text-center">
+                            <p className="text-2xl font-bold text-indigo-600">{teamStats.manualTime}h</p>
+                            <p className="text-xs text-gray-500 mt-1">Manual Review Time</p>
+                          </div>
+                          <div className="bg-green-100 rounded-lg p-4 text-center">
+                            <p className="text-2xl font-bold text-green-600">{teamStats.aiTime}h</p>
+                            <p className="text-xs text-gray-500 mt-1">AI Review Time</p>
+                          </div>
+                          <div className="bg-purple-100 rounded-lg p-4 text-center">
+                            <p className="text-2xl font-bold text-purple-600">{teamStats.timeSavedPercent}%</p>
+                            <p className="text-xs text-gray-500 mt-1">Time Saved</p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+
+                  <button
+                    onClick={() => { setShowTeamAnalytics(false); setTeamStats(null); }}
+                    className="mt-4 px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Create Team Modal */}
             {showCreateTeamModal && (
