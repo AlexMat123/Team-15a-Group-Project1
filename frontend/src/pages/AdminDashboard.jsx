@@ -34,6 +34,7 @@ const AdminDashboard = () => {
   const [selectedMemberIds, setSelectedMemberIds] = useState([]);
   const [addingMembers, setAddingMembers] = useState(false);
   const [showViewMembers, setShowViewMembers] = useState(false);
+  const [confirmRemoveMember, setConfirmRemoveMember] = useState(null);
 
   // --- Fetch all admin data on mount ---
   useEffect(() => {
@@ -194,6 +195,19 @@ const handleAddMembers = async () => {
     alert(err.response?.data?.message || 'Failed to add members');
   } finally {
     setAddingMembers(false);
+  }
+};
+
+const handleRemoveMember = async (userId) => {
+  try {
+    const token = localStorage.getItem('token');
+    const res = await axios.delete(`/api/admin/teams/${manageTeamId}/members/${userId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    setTeams(prev => prev.map(t => t._id === manageTeamId ? res.data : t));
+    setConfirmRemoveMember(null);
+  } catch (err) {
+    alert(err.response?.data?.message || 'Failed to remove member');
   }
 };
 
@@ -546,9 +560,6 @@ const handleAddMembers = async () => {
                     <button onClick={handleOpenAddMembers} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                       Add Members
                     </button>
-                    <button className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
-                      Remove Members
-                    </button>
                     <button onClick={() => setShowViewMembers(true)} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                       View Members
                     </button>
@@ -649,21 +660,53 @@ const handleAddMembers = async () => {
                             <div className="bg-indigo-100 text-indigo-600 rounded-full h-8 w-8 flex items-center justify-center text-sm font-semibold">
                               {m.name?.charAt(0).toUpperCase()}
                             </div>
-                            <div>
+                            <div className="flex-1">
                               <p className="text-sm font-medium text-gray-900">{m.name}</p>
                               <p className="text-xs text-gray-500">{m.email}</p>
                             </div>
+                            <button
+                              onClick={() => setConfirmRemoveMember(m)}
+                              className="text-xs text-red-500 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50"
+                            >
+                              Remove
+                            </button>
                           </div>
                         ))}
                       </div>
                     )}
                     <button
-                      onClick={() => setShowViewMembers(false)}
+                      onClick={() => { setShowViewMembers(false); setConfirmRemoveMember(null); }}
                       className="mt-4 px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
                     >
                       Back
                     </button>
                   </div>
+
+                  {/* Confirm Remove Member */}
+                  {confirmRemoveMember && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
+                      <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Remove Member</h3>
+                        <p className="text-sm text-gray-600 mb-5">
+                          Are you sure you want to remove <span className="font-semibold">{confirmRemoveMember.name}</span> from this team? This action cannot be undone.
+                        </p>
+                        <div className="flex justify-end gap-3">
+                          <button
+                            onClick={() => setConfirmRemoveMember(null)}
+                            className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleRemoveMember(confirmRemoveMember._id)}
+                            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()}

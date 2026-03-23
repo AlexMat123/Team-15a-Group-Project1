@@ -206,4 +206,24 @@ router.patch('/teams/:id/members', protect, authorize('admin'), async (req, res)
   }
 });
 
+// DELETE /api/admin/teams/:id/members/:userId
+router.delete('/teams/:id/members/:userId', protect, authorize('admin'), async (req, res) => {
+  try {
+    const team = await Team.findById(req.params.id);
+    if (!team) return res.status(404).json({ message: 'Team not found' });
+
+    team.members = team.members.filter(m => m.toString() !== req.params.userId);
+    await team.save();
+
+    const updated = await Team.findById(team._id)
+      .populate('createdBy', 'name email')
+      .populate('members', 'name email')
+      .lean();
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
