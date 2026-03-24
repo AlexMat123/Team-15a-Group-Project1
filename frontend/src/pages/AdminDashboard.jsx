@@ -1,64 +1,998 @@
-import { Users, FileText, AlertTriangle, Clock } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  AlertTriangle,
+  Clock,
+  FileText,
+  KeyRound,
+  Search,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import api from '../services/api';
+
+const tabs = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'users', label: 'Users' },
+  { id: 'manage', label: 'Manage' },
+  { id: 'reports', label: 'Reports' },
+  { id: 'training', label: 'AI Training' },
+];
+
+const COLORS = ['#6366f1', '#f59e0b', '#ef4444', '#10b981', '#3b82f6'];
+
+const formatDate = (value) => {
+  if (!value) {
+    return 'N/A';
+  }
+
+  return new Date(value).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const getStatusOutlineClass = (status) => {
+  const normalizedStatus = String(status || '').toLowerCase();
+
+  if (normalizedStatus.includes('pending')) {
+    return 'border-orange-400 text-orange-700';
+  }
+
+  if (normalizedStatus === 'active') {
+    return 'border-green-400 text-green-700';
+  }
+
+  if (normalizedStatus.includes('inactive')) {
+    return 'border-red-400 text-red-700';
+  }
+
+  return 'border-gray-300 text-gray-700';
+};
 
 const AdminDashboard = () => {
   const { user } = useAuth();
 
+  const [activeTab, setActiveTab] = useState('overview');
+  const [manageView, setManageView] = useState('users');
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('user');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [reportSearch, setReportSearch] = useState('');
+  const [openTrainingMenu, setOpenTrainingMenu] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [loadingReports, setLoadingReports] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [resettingUserId, setResettingUserId] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [requestsMessage, setRequestsMessage] = useState('');
+  const [requestsError, setRequestsError] = useState('');
+  const [deletingUserId, setDeletingUserId] = useState('');
+  const [passwordResetRequests, setPasswordResetRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(true);
+  const [reportsError, setReportsError] = useState('');
+  const [dashboardStats, setDashboardStats] = useState({
+    totalReports: 0,
+    totalErrors: 0,
+    timeSaved: 0,
+    manualTime: 0,
+    aiTime: 0,
+    timeSavedPercent: 0,
+    errorBreakdown: [
+      { name: 'Placeholder', value: 0 },
+      { name: 'Consistency', value: 0 },
+      { name: 'Compliance', value: 0 },
+      { name: 'Formatting', value: 0 },
+      { name: 'Missing Data', value: 0 },
+    ],
+  });
+
+
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+
+    try {
+      const response = await api.get('/users');
+      setUsers(response.data);
+      setErrorMessage('');
+    } catch (error) {
+      setErrorMessage(error.response?.data?.message || 'Failed to load users');
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId, userName) => {
+    const confirmed = window.confirm(`Are you sure you want to delete ${userName}?`)
+
+    if (!confirmed){
+      return;
+    }
+
+    setDeletingUserId(userId);
+    setRequestsMessage('');
+    setRequestsError('');
+
+    try{
+      const response = await api.delete(`/users/${userId}`);
+      setRequestsMessage(response.data.message || 'User deleted successfully');
+      await fetchUsers();
+    } catch(error) {
+      setRequestsError(error.response?.data?.message || 'Failed to delete this user');
+    } finally {
+      setDeletingUserId('')
+    }
+  };
+
+  const mapReportStats = (statsData) => {
+    const totalReports = statsData?.totalReports || 0;
+    const totalErrors = statsData?.totalErrors || 0;
+    const timeSaved = Math.round(statsData?.totalTimeSaved || statsData?.timeSaved || 0);
+    const manualTime = Number((timeSaved / 0.16).toFixed(1));
+    const aiTime = Math.max(0, Math.round(manualTime - timeSaved));
+    const timeSavedPercent = manualTime > 0 ? Math.round((timeSaved / manualTime) * 100) : 0;
+
+    return {
+      totalReports,
+      totalErrors,
+      timeSaved,
+      manualTime,
+      aiTime,
+      timeSavedPercent,
+      errorBreakdown: [
+        { name: 'Placeholder', value: statsData?.placeholderErrors || 0 },
+        { name: 'Consistency', value: statsData?.consistencyErrors || 0 },
+        { name: 'Compliance', value: statsData?.complianceErrors || 0 },
+        { name: 'Formatting', value: statsData?.formattingErrors || 0 },
+        { name: 'Missing Data', value: statsData?.missingDataErrors || 0 },
+      ],
+    };
+  };
+
+  const fetchDashboardData = async () => {
+    setLoadingReports(true);
+
+    try {
+      const [statsResponse, reportsResponse] = await Promise.all([
+        api.get('/admin/stats'),
+        api.get('/admin/reports'),
+      ]);
+
+      setDashboardStats({
+        ...mapReportStats({
+          totalReports: statsResponse.data?.totalReports,
+          totalErrors: statsResponse.data?.totalErrors,
+          timeSaved: statsResponse.data?.timeSaved,
+          placeholderErrors: statsResponse.data?.errorBreakdown?.find((e) => e.name === 'Placeholder')?.value || 0,
+          consistencyErrors: statsResponse.data?.errorBreakdown?.find((e) => e.name === 'Consistency')?.value || 0,
+          complianceErrors: statsResponse.data?.errorBreakdown?.find((e) => e.name === 'Compliance')?.value || 0,
+          formattingErrors: statsResponse.data?.errorBreakdown?.find((e) => e.name === 'Formatting')?.value || 0,
+          missingDataErrors: statsResponse.data?.errorBreakdown?.find((e) => e.name === 'Missing Data')?.value || 0,
+          totalTimeSaved: statsResponse.data?.timeSaved,
+        }),
+        manualTime: statsResponse.data?.manualTime || 0,
+        aiTime: statsResponse.data?.aiTime || 0,
+        timeSavedPercent: statsResponse.data?.timeSavedPercent || 0,
+        errorBreakdown: statsResponse.data?.errorBreakdown || [],
+      });
+      setReports(reportsResponse.data || []);
+      setReportsError('');
+    } catch (adminError) {
+      try {
+        const [statsResponse, reportsResponse] = await Promise.all([
+          api.get('/reports/stats'),
+          api.get('/reports'),
+        ]);
+
+        setDashboardStats(mapReportStats(statsResponse.data));
+        setReports(reportsResponse.data || []);
+        setReportsError('');
+      } catch (fallbackError) {
+        setReportsError(
+          fallbackError.response?.data?.message || 'Failed to load report analytics'
+        );
+      }
+    } finally {
+      setLoadingReports(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+    fetchPasswordResetRequest();
+    fetchDashboardData();
+  }, []);
+
   const stats = [
-    { label: 'Total Users', value: '0', icon: Users, color: 'bg-blue-500' },
-    { label: 'Reports Analyzed', value: '0', icon: FileText, color: 'bg-green-500' },
-    { label: 'Total Errors Found', value: '0', icon: AlertTriangle, color: 'bg-red-500' },
-    { label: 'Time Saved', value: '0h', icon: Clock, color: 'bg-amber-500' },
+    { label: 'Total Users', value: users.length, icon: Users, color: 'bg-blue-500' },
+    { label: 'Reports Analyzed', value: dashboardStats.totalReports, icon: FileText, color: 'bg-green-500' },
+    { label: 'Total Errors Found', value: dashboardStats.totalErrors, icon: AlertTriangle, color: 'bg-red-500' },
+    { label: 'Time Saved', value: `${dashboardStats.timeSaved}h`, icon: Clock, color: 'bg-amber-500' },
   ];
+
+  const barData = dashboardStats.errorBreakdown.map((entry) => ({
+    name: entry.name,
+    errors: entry.value,
+  }));
+
+  const timeSavingsCards = [
+    { label: 'Manual Review Time', value: `${dashboardStats.manualTime}h`, bg: 'bg-purple-100', text: 'text-indigo-600' },
+    { label: 'AI Review Time', value: `${dashboardStats.aiTime}h`, bg: 'bg-green-100', text: 'text-green-600' },
+    { label: 'Time Saved', value: `${dashboardStats.timeSavedPercent}%`, bg: 'bg-purple-100', text: 'text-purple-600' },
+  ];
+
+  const filteredUsers = users.filter((entry) => {
+    const query = searchTerm.trim().toLowerCase();
+
+    if (!query) {
+      return true;
+    }
+
+    return (
+      entry.name?.toLowerCase().includes(query) ||
+      entry.email?.toLowerCase().includes(query) ||
+      entry.role?.toLowerCase().includes(query)
+    );
+  });
+
+  const filteredReports = reports.filter((report) => {
+    const query = reportSearch.trim().toLowerCase();
+
+    if (!query) {
+      return true;
+    }
+
+    return (
+      report.filename?.toLowerCase().includes(query) ||
+      report.analyzedBy?.name?.toLowerCase().includes(query)
+    );
+  });
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setSuccessMessage('');
+    setErrorMessage('');
+
+    try {
+      const response = await api.post('/users', { name, email, role });
+
+      setSuccessMessage(response.data.message);
+      setRequestsMessage('');
+      setName('');
+      setEmail('');
+      setRole('user');
+      setShowCreateUserModal(false);
+      await fetchUsers();
+    } catch (error) {
+      setErrorMessage(error.response?.data?.message || 'Failed to create user');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async (userId) => {
+    setResettingUserId(userId);
+    setRequestsMessage('');
+    setRequestsError('');
+
+    try {
+      const response = await api.put(`/users/${userId}/reset-password`);
+      setRequestsMessage(response.data.message || 'Password reset successfully');
+    } catch (error) {
+      setRequestsError(
+        error.response?.data?.message || 'Failed to reset this user password'
+      );
+    } finally {
+      setResettingUserId('');
+    }
+  };
+
+  const openCreateUserModal = () => {
+    setSuccessMessage('');
+    setErrorMessage('');
+    setShowCreateUserModal(true);
+  };
+
+  const closeCreateUserModal = () => {
+    if (submitting) {
+      return;
+    }
+
+    setShowCreateUserModal(false);
+    setName('');
+    setEmail('');
+    setRole('user');
+    setErrorMessage('');
+  };
+
+  const fetchPasswordResetRequest = async () =>{
+    setLoadingRequests(true);
+
+    try {
+      const response = await api.get('/password-reset-requests?status=pending');
+      setPasswordResetRequests(response.data);
+      setRequestsError('');
+    } catch (error) {
+      setRequestsError(
+        error.response?.data?.message || 'Failed to load password requests'
+      );
+    } finally {
+      setLoadingRequests(false)
+    }
+  };
+
+  const handleCompleteRequest = async (requestId) => {
+    setRequestsMessage('');
+    setRequestsError('');
+
+    try{
+      const response = await api.put(`/password-reset-requests/${requestId}/complete`);
+      setRequestsMessage(response.data.message);
+      await fetchPasswordResetRequest();
+    } catch (error) {
+      setRequestsError(error.response?.data?.message || 'Failed to complete password reset request');
+    }
+  };
+
+  const handleRejectRequest = async (requestId) => {
+    setRequestsMessage('');
+    setRequestsError('');
+
+    try {
+      const response = await api.put(`/password-reset-requests/${requestId}/reject`, {
+        notes: 'Rejected by Admin',
+      });
+      setRequestsMessage(response.data.message);
+      await fetchPasswordResetRequest();
+    } catch(error) {
+      setRequestsError(error.response?.data?.message || 'Failed to reject password request');
+    }
+  };
+
+  const handleAddToTraining = async (reportId, label) => {
+    try {
+      await api.patch(`/admin/reports/${reportId}/training`, { trainingLabel: label });
+      setReports((prev) =>
+        prev.map((entry) =>
+          entry._id === reportId
+            ? { ...entry, addedToTraining: true, trainingLabel: label }
+            : entry
+        )
+      );
+      setOpenTrainingMenu(null);
+    } catch (error) {
+      setReportsError(error.response?.data?.message || 'Failed to add report to training');
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
-      
+
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600">Manage users and monitor system analytics</p>
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+            <p className="text-gray-600">Manage users and monitor system analytics</p>
+          </div>
+
+          {activeTab === 'users' && (
+            <button
+              type="button"
+              onClick={openCreateUserModal}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+            >
+              Create User
+            </button>
+          )}
         </div>
 
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-          <p className="text-green-700 text-sm">
-            <span className="font-semibold">Local AI Processing - Client Data Protected</span>
-            <br />
-            All AI processing is performed locally on your servers. Your confidential client data never leaves your infrastructure.
-          </p>
+        <div className="mb-8 border-b border-gray-200">
+          <div className="flex gap-8 overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`border-b-2 pb-4 text-sm font-semibold transition ${
+                  activeTab === tab.id
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat) => (
-            <div key={stat.label} className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex items-center">
-                <div className={`${stat.color} p-3 rounded-lg`}>
-                  <stat.icon className="w-6 h-6 text-white" />
+        {activeTab === 'overview' && (
+          <>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <p className="text-green-700 text-sm">
+                <span className="font-semibold">Local AI Processing - Client Data Protected</span>
+                <br />
+                All AI processing is performed locally on your servers. Your confidential client
+                data never leaves your infrastructure.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {stats.map((stat) => (
+                <div key={stat.label} className="bg-white rounded-xl shadow-sm p-6">
+                  <div className="flex items-center">
+                    <div className={`${stat.color} p-3 rounded-lg`}>
+                      <stat.icon className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                      <p className="text-sm text-gray-500">{stat.label}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="ml-4">
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                  <p className="text-sm text-gray-500">{stat.label}</p>
+              ))}
+            </div>
+
+            {loadingReports ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 mb-8 text-sm text-gray-500">
+                Loading analytics...
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Most Common Errors</h2>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={barData}>
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="errors" fill="#6366f1" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Error Type Distribution</h2>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie data={dashboardStats.errorBreakdown} dataKey="value" nameKey="name" outerRadius={80}>
+                          {dashboardStats.errorBreakdown.map((_, index) => (
+                            <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
+
+                <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Time Savings Analysis</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {timeSavingsCards.map((item) => (
+                      <div key={item.label} className={`${item.bg} rounded-lg p-6 text-center`}>
+                        <p className={`text-3xl font-bold ${item.text}`}>{item.value}</p>
+                        <p className="text-sm text-gray-500 mt-1">{item.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {reportsError && <p className="mb-4 text-sm text-red-600">{reportsError}</p>}
+
+            {successMessage && (
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                  Welcome, {user?.name}!
+                </h2>
+                <p className="text-sm text-green-600">{successMessage}</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'users' && (
+          <section className="bg-white rounded-2xl shadow-sm p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-semibold text-gray-900">User Management</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Search your existing users and review their roles and account status.
+                </p>
+              </div>
+
+              <label className="relative block w-full md:max-w-xs">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search users..."
+                  className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm text-gray-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                />
+              </label>
+            </div>
+
+            {errorMessage && <p className="mb-4 text-sm text-red-600">{errorMessage}</p>}
+            {successMessage && <p className="mb-4 text-sm text-green-600">{successMessage}</p>}
+
+            {loadingUsers ? (
+              <p className="text-sm text-gray-500">Loading users...</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-left text-gray-600">
+                      <th className="px-4 py-4 font-semibold">User</th>
+                      <th className="px-4 py-4 font-semibold">Email</th>
+                      <th className="px-4 py-4 font-semibold">Role</th>
+                      <th className="px-4 py-4 font-semibold">Joined</th>
+                      <th className="px-4 py-4 font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map((entry) => (
+                      <tr key={entry._id} className="border-b border-gray-100 last:border-b-0">
+                        <td className="px-4 py-5 text-gray-900">{entry.name}</td>
+                        <td className="px-4 py-5 text-gray-600">{entry.email}</td>
+                        <td className="px-4 py-5 capitalize text-gray-600">
+                          {entry.role?.replace('_', ' ')}
+                        </td>
+                        <td className="px-4 py-5 text-gray-600">{formatDate(entry.createdAt)}</td>
+                        <td className="px-4 py-5">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                              entry.status === 'active'
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-200 text-gray-700'
+                            }`}
+                          >
+                            {entry.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {!filteredUsers.length && (
+                  <p className="px-4 py-6 text-sm text-gray-500">No users match your search.</p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {activeTab === 'manage' && (
+          <section className="bg-white rounded-2xl shadow-sm p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-semibold text-gray-900">Manage Users</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Handle account support actions such as password resets and deletions from one place.
+                </p>
+              </div>
+
+              <label className="relative block w-full md:max-w-xs">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search users..."
+                  className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm text-gray-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                />
+              </label>
+            </div>
+
+            <div className="mb-6 flex gap-3 border-b border-gray-200 pb-4">
+              <button
+                type="button"
+                onClick={() => setManageView('users')}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                  manageView === 'users'
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                }`}
+              >
+                User Actions
+              </button>
+              <button
+                type="button"
+                onClick={() => setManageView('requests')}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                  manageView === 'requests'
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                }`}
+              >
+                Password Reset Requests
+              </button>
+            </div>
+
+            {requestsMessage && <p className="mb-4 text-sm text-green-600">{requestsMessage}</p>}
+            {requestsError && <p className="mb-4 text-sm text-red-600">{requestsError}</p>}
+
+            {manageView === 'users' && loadingUsers ? (
+              <p className="text-sm text-gray-500">Loading users...</p>
+            ) : manageView === 'requests' && loadingRequests ? (
+              <p className="text-sm text-gray-500">Loading password reset requests...</p>
+            ) : (
+              <div className="overflow-x-auto">
+                {manageView === 'users' ? (
+                  <>
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-left text-gray-600">
+                          <th className="px-4 py-4 font-semibold">User</th>
+                          <th className="px-4 py-4 font-semibold">Email</th>
+                          <th className="px-4 py-4 font-semibold">Role</th>
+                          <th className="px-4 py-4 font-semibold">Status</th>
+                          <th className="px-4 py-4 font-semibold">Reset Password</th>
+                          <th className="px-4 py-4 font-semibold">Delete User</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredUsers.map((entry) => (
+                          <tr key={entry._id} className="border-b border-gray-100 last:border-b-0">
+                            <td className="px-4 py-5 text-gray-900">{entry.name}</td>
+                            <td className="px-4 py-5 text-gray-600">{entry.email}</td>
+                            <td className="px-4 py-5 capitalize text-gray-600">
+                              {entry.role?.replace('_', ' ')}
+                            </td>
+                            <td className="px-4 py-5">
+                              <span
+                                className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold capitalize ${getStatusOutlineClass(
+                                  entry.status
+                                )}`}
+                              >
+                                {entry.status || 'unknown'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-5">
+                              <button
+                                type="button"
+                                onClick={() => handleResetPassword(entry._id)}
+                                disabled={resettingUserId === entry._id || deletingUserId === entry._id}
+                                className="inline-flex items-center gap-2 rounded-lg border border-amber-300 px-4 py-2 text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <KeyRound className="h-4 w-4" />
+                                {resettingUserId === entry._id ? 'Resetting...' : 'Reset Password'}
+                              </button>
+                            </td>
+
+                            <td className="px-4 py-5">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUser(entry._id, entry.name)}
+                                disabled={deletingUserId === entry._id || resettingUserId === entry._id}
+                                className="inline-flex items-center gap-2 rounded-lg border border-red-300 px-4 py-2 text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                {deletingUserId === entry._id ? 'Deleting...' : 'Delete User'}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    {!filteredUsers.length && (
+                      <p className="px-4 py-6 text-sm text-gray-500">
+                        No users match your search.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-left text-gray-600">
+                          <th className="px-4 py-4 font-semibold">User</th>
+                          <th className="px-4 py-4 font-semibold">Email</th>
+                          <th className="px-4 py-4 font-semibold">Role</th>
+                          <th className="px-4 py-4 font-semibold">Requested At</th>
+                          <th className="px-4 py-4 font-semibold">Status</th>
+                          <th className="px-4 py-4 font-semibold">Reset Password</th>
+                          <th className="px-4 py-4 font-semibold">Reject</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {passwordResetRequests
+                          .filter((request) => {
+                            const query = searchTerm.trim().toLowerCase();
+
+                            if (!query) {
+                              return true;
+                            }
+
+                            return (
+                              request.user?.name?.toLowerCase().includes(query) ||
+                              request.user?.email?.toLowerCase().includes(query) ||
+                              request.user?.role?.toLowerCase().includes(query) ||
+                              request.status?.toLowerCase().includes(query)
+                            );
+                          })
+                          .map((request) => (
+                            <tr key={request._id} className="border-b border-gray-100 last:border-b-0">
+                              <td className="px-4 py-5 text-gray-900">{request.user?.name}</td>
+                              <td className="px-4 py-5 text-gray-600">{request.user?.email}</td>
+                              <td className="px-4 py-5 capitalize text-gray-600">
+                                {request.user?.role?.replace('_', ' ')}
+                              </td>
+                              <td className="px-4 py-5 text-gray-600">
+                                {formatDate(request.requestedAt)}
+                              </td>
+                              <td className="px-4 py-5">
+                                <span
+                                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold capitalize ${getStatusOutlineClass(
+                                    request.status
+                                  )}`}
+                                >
+                                  {request.status || 'unknown'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCompleteRequest(request._id)}
+                                  disabled={resettingUserId === request.user?._id}
+                                  className="inline-flex items-center gap-2 rounded-lg border border-amber-300 px-4 py-2 text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <KeyRound className="h-4 w-4" />
+                                  {resettingUserId === request.user?._id ? 'Resetting...' : 'Reset Password'}
+                                </button>
+                              </td>
+                              <td className="px-4 py-5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRejectRequest(request._id)}
+                                  className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition hover:bg-gray-50"
+                                >
+                                  Reject
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+
+                    {!passwordResetRequests.length && (
+                      <p className="px-4 py-6 text-sm text-gray-500">
+                        No password reset requests found.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {activeTab === 'reports' && (
+          <section>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Analysed Reports</h2>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search reports..."
+                  value={reportSearch}
+                  onChange={(e) => setReportSearch(e.target.value)}
+                  className="border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm"
+                />
               </div>
             </div>
-          ))}
-        </div>
 
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Welcome, {user?.name}!
-          </h2>
-          <p className="text-gray-600">
-            You are logged in as <span className="font-semibold capitalize">{user?.role?.replace('_', ' ')}</span>.
-          </p>
-          <p className="text-gray-500 mt-2">
-            Full admin dashboard features will be implemented in Phase 5.
-          </p>
-        </div>
+            {reportsError && <p className="mb-4 text-sm text-red-600">{reportsError}</p>}
+
+            {loadingReports ? (
+              <div className="bg-white rounded-xl shadow-sm p-6 text-sm text-gray-500">
+                Loading reports...
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredReports.map((report) => (
+                  <div key={report._id} className="bg-white rounded-xl border border-gray-200 p-6 hover:border-indigo-400 transition-colors">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-indigo-600 text-lg">📄</span>
+                          <p className="font-bold text-gray-900 text-base">{report.filename}</p>
+                        </div>
+                        <p className="text-sm text-gray-500 mb-1">
+                          Analyzed by <span className="font-semibold text-gray-700">{report.analyzedBy?.name ?? 'Unknown'}</span> on{' '}
+                          {formatDate(report.analyzedAt || report.createdAt)}
+                        </p>
+                        <p className="text-sm mb-3">
+                          <span className="text-red-500 font-medium">{report.errorCount || 0} errors found</span>
+                          <span className="text-gray-400 mx-2">•</span>
+                          <span className="text-green-600 font-medium">{report.timeSaved || 0} hours saved</span>
+                        </p>
+
+                        {report.errors?.length > 0 && (
+                          <div className="border-t border-gray-100 pt-3">
+                            <p className="text-xs font-semibold text-gray-600 mb-2">Errors Detected:</p>
+                            <div className="space-y-1">
+                              {report.errors.map((error, index) => (
+                                <div key={error._id || index} className="flex items-center gap-3">
+                                  <span className="text-xs px-2 py-0.5 rounded font-medium min-w-[80px] text-center bg-gray-100 text-gray-700">
+                                    {error.type}
+                                  </span>
+                                  <span className="text-sm text-gray-600">{error.message}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {user?.role === 'admin' && (
+                        <div className="relative ml-4">
+                          <button
+                            onClick={() => setOpenTrainingMenu(openTrainingMenu === report._id ? null : report._id)}
+                            className={`text-sm border rounded-lg px-3 py-1.5 whitespace-nowrap ${
+                              report.addedToTraining
+                                ? 'text-green-600 border-green-200 bg-green-50 hover:bg-green-100'
+                                : 'text-indigo-600 border-indigo-200 bg-indigo-50 hover:bg-indigo-100'
+                            }`}
+                          >
+                            {report.addedToTraining
+                              ? `✓ ${report.trainingLabel === 'good' ? 'Good' : 'Bad'} Example`
+                              : '+ Add to Training'}
+                          </button>
+
+                          {openTrainingMenu === report._id && (
+                            <div className="absolute right-0 top-10 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-10 w-52">
+                              <p className="text-xs font-semibold text-gray-600 mb-2">Add as training example:</p>
+                              <button
+                                onClick={() => handleAddToTraining(report._id, 'good')}
+                                className="w-full text-left text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded px-3 py-2 mb-1"
+                              >
+                                ✓ Good Example
+                              </button>
+                              <button
+                                onClick={() => handleAddToTraining(report._id, 'bad')}
+                                className="w-full text-left text-sm font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded px-3 py-2"
+                              >
+                                ✗ Bad Example
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {activeTab === 'training' && (
+          <section className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-500">
+            <p className="text-lg font-medium">AI Training</p>
+            <p className="text-sm mt-2">Use the Reports tab to add training examples.</p>
+          </section>
+        )}
       </main>
+
+      {showCreateUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-gray-200 px-6 py-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Create New User</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Add the user details below and assign their role.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeCreateUserModal}
+                disabled={submitting}
+                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close create user modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-4 px-6 py-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2"
+                  placeholder="Jane Smith"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2"
+                  placeholder="jane@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Role
+                </label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2"
+                >
+                  <option value="user">User</option>
+                  <option value="team_leader">Team Leader</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+
+              {errorMessage && (
+                <p className="text-sm text-red-600">{errorMessage}</p>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={closeCreateUserModal}
+                  disabled={submitting}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {submitting ? 'Creating...' : 'Create User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </div>

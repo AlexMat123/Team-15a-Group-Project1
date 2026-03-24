@@ -82,6 +82,12 @@ const reportSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    trainingLabel: {
+      type: String,
+      enum: ['good', 'bad', null],
+      default: null,
+    },
     metadata: {
       pageCount: { type: Number, default: 0 },
       wordCount: { type: Number, default: 0 },
