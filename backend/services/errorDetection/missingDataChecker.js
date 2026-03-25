@@ -12,21 +12,29 @@ const requiredFields = [
     name: 'Reference Number',
     pattern: /Reference Number[\s\S]{0,50}?\d{4,}/i,
     section: 'Header',
+    headerField: true,
+    aliases: ['Reference Number', 'Reference'],
   },
   {
     name: 'Visit Date',
     pattern: /Visit Date[\s\S]{0,50}?\d{1,2}(st|nd|rd|th)?\s+\w+\s+\d{4}/i,
     section: 'Header',
+    headerField: true,
+    aliases: ['Visit Date', 'Date of Visit', 'Assessment Date'],
   },
   {
     name: 'Site Address',
     pattern: /Site Address[\s\S]{0,100}?[A-Z][a-z]+/i,
     section: 'Header',
+    headerField: true,
+    aliases: ['Site Address', 'Address'],
   },
   {
     name: 'Consultant Name',
     pattern: /Consultant[\s\S]{0,50}?[A-Z][a-z]+\s+[A-Z][a-z]+/i,
     section: 'Header',
+    headerField: true,
+    aliases: ['Consultant', 'Assessor'],
   },
   {
     name: 'Building Height',
@@ -53,17 +61,89 @@ const requiredFields = [
 const emptyFieldPatterns = [
   {
     name: 'Empty field with colon',
-    pattern: /^([A-Z][a-zA-Z\s]+):\s*$/gm,
+    // Keep matching on a single line only to avoid multiline capture noise.
+    pattern: /^([A-Z][A-Za-z0-9&'\/(),.\- ]{2,80}):\s*$/gm,
     severity: 'medium',
-  },
-  {
-    name: 'Blank line after label',
-    pattern: /^([A-Z][a-zA-Z\s]+)\n\s*\n/gm,
-    severity: 'low',
   },
 ];
 
-const detect = (text, sections = []) => {
+const fieldPresent = (text, keyword, options = {}) => {
+  const normalizedText = (text || '').toLowerCase();
+  const normalizedKeyword = (keyword || '').toLowerCase();
+  const windowLength = options.windowLength || 200;
+  const minValueLength = options.minValueLength || 3;
+  const maxValueLength = options.maxValueLength || 80;
+
+  let startIndex = 0;
+  while (startIndex < normalizedText.length) {
+    const idx = normalizedText.indexOf(normalizedKeyword, startIndex);
+    if (idx === -1) return false;
+
+    const window = text.slice(idx, idx + windowLength).replace(/\s+/g, ' ');
+    const hasColonValue = new RegExp(`:\\s*.{${minValueLength},${maxValueLength}}`).test(window);
+    if (hasColonValue) {
+      return true;
+    }
+
+    startIndex = idx + normalizedKeyword.length;
+  }
+
+  return false;
+};
+
+const headerFieldPresent = (text, field) => {
+  const headerWindow = (text || '').slice(0, 1500);
+  const aliases = field.aliases && field.aliases.length ? field.aliases : [field.name];
+  return aliases.some((alias) => fieldPresent(headerWindow, alias, { windowLength: 250 }));
+};
+
+const headerFieldMentioned = (headerFields = {}, field = {}) => {
+  const headerText = (headerFields.rawHeaderText || '').toLowerCase();
+  const aliases = field.aliases && field.aliases.length ? field.aliases : [field.name];
+  return aliases.some((alias) => headerText.includes(alias.toLowerCase()));
+};
+
+const fieldLabelMentioned = (text, keyword) => {
+  if (!text || !keyword) return false;
+  return text.toLowerCase().includes(keyword.toLowerCase());
+};
+
+const isLikelyFieldLabel = (label = '') => {
+  const normalized = label.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized.length > 40) return false;
+  if (/\b(are|were|is|specifies|covers|identified|following)\b/.test(normalized)) return false;
+  return true;
+};
+
+const shouldIgnoreFieldLabel = (fieldName = '') => {
+  const normalized = fieldName.trim().toLowerCase();
+
+  if (!normalized) return true;
+  if (normalized.length < 3 || normalized.length > 80) return true;
+  if (/^\d+(\.\d+)*$/.test(normalized)) return true;
+
+  const ignoreFragments = [
+    'table of contents',
+    'copyright',
+    'draft',
+    'version',
+    'page ',
+    'prepared for',
+    'site address',
+    'fire risk assessment -',
+    'risk assessment and action plan',
+  ];
+
+  if (ignoreFragments.some((fragment) => normalized.includes(fragment))) return true;
+  if (/\b\d{5,}\b/.test(normalized)) return true; // report IDs/page artifacts
+  if (normalized.split(/\s+/).length > 8) return true; // likely sentence text, not a field label
+  if (!isLikelyFieldLabel(fieldName)) return true;
+
+  return false;
+};
+
+const detect = (text, sections = [], headerFields = {}) => {
   const errors = [];
 
   requiredSections.forEach((section) => {
@@ -82,10 +162,33 @@ const detect = (text, sections = []) => {
   });
 
   requiredFields.forEach((field) => {
+    if (
+      field.name === 'Visit Date' &&
+      field.headerField &&
+      !headerFields.visitDate &&
+      (
+        headerFields.hasUsableText === false ||
+        !headerFieldMentioned(headerFields, field)
+      )
+    ) {
+      return;
+    }
+
     if (!field.pattern.test(text)) {
-      const fieldNameInDoc = text.includes(field.name.split(' ')[0]);
-      
-      if (fieldNameInDoc) {
+      const labelMentioned =
+        fieldLabelMentioned(text, field.name) ||
+        fieldLabelMentioned(text, field.name.split(' ')[0]);
+      const valuePresent =
+        (field.headerField && (
+          (field.name === 'Visit Date' && headerFields.visitDate) ||
+          (field.name === 'Reference Number' && headerFields.referenceNumber) ||
+          (field.name === 'Consultant Name' && headerFields.consultant) ||
+          headerFieldPresent(text, field)
+        )) ||
+        fieldPresent(text, field.name) ||
+        fieldPresent(text, field.name.split(' ')[0]);
+
+      if (labelMentioned && !valuePresent) {
         errors.push({
           type: 'missing_data',
           severity: 'medium',
@@ -107,7 +210,7 @@ const detect = (text, sections = []) => {
     while ((match = regex.exec(text)) !== null) {
       const fieldName = match[1]?.trim();
       
-      if (fieldName && fieldName.length > 3 && fieldName.length < 50) {
+      if (fieldName && !shouldIgnoreFieldLabel(fieldName)) {
         errors.push({
           type: 'missing_data',
           severity: pattern.severity,

@@ -31,6 +31,10 @@ const trainingExampleSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    sourceReport: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Report',
+    },
     trainedAt: {
       type: Date,
     },
@@ -43,6 +47,14 @@ const trainingExampleSchema = new mongoose.Schema(
       type: [Number],
       default: [],
     },
+    manualOverride: {
+      type: Boolean,
+      default: false,
+    },
+    detectedErrorCount: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
@@ -50,6 +62,7 @@ const trainingExampleSchema = new mongoose.Schema(
 );
 
 trainingExampleSchema.index({ type: 1, status: 1 });
+trainingExampleSchema.index({ sourceReport: 1 }, { unique: true, sparse: true });
 
 trainingExampleSchema.statics.getTrainingStats = async function () {
   const stats = await this.aggregate([

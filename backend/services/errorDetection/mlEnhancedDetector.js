@@ -1,5 +1,27 @@
 const mlService = require('../mlService');
 
+const MIN_SECTION_LENGTH_FOR_ML = 50;
+const MIN_CLEAN_PROSE_FOR_ML = 150;
+
+const getCleanProseLength = (content = '') => {
+  const normalized = content.replace(/\s+/g, ' ').trim();
+  return (normalized.match(/[A-Za-z]/g) || []).length;
+};
+
+const isAddressLikeSection = (section = {}) => {
+  const title = section.title || '';
+  const content = section.content || '';
+  const combined = `${title}\n${content}`;
+
+  if (/^[\dA-Za-z\s,.'-]+$/.test(content.trim()) && content.split('\n').length <= 4) {
+    if (/\b(road|street|lane|avenue|close|drive|court|way|liverpool|merseyside|postcode)\b/i.test(combined)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 const analyzeWithML = async (text, sections = []) => {
   const errors = [];
 
@@ -10,10 +32,27 @@ const analyzeWithML = async (text, sections = []) => {
 
   try {
     for (const section of sections.slice(0, 10)) {
-      if (section.content && section.content.length > 50) {
+      if (section.content && section.content.length > MIN_SECTION_LENGTH_FOR_ML) {
+        const cleanProseLength = getCleanProseLength(section.content);
+        if (cleanProseLength >= MIN_CLEAN_PROSE_FOR_ML || isAddressLikeSection(section)) {
+          continue;
+        }
+
+        if (process.env.DEBUG_ML_SECTIONS === 'true') {
+          console.log(
+            `[ML DEBUG] evaluating section="${section.title}" chars=${section.content.length} cleanProse=${cleanProseLength}`
+          );
+        }
+
         const completeness = await mlService.analyzeSectionCompleteness(
           section.content.substring(0, 500)
         );
+
+        if (process.env.DEBUG_ML_SECTIONS === 'true' && completeness) {
+          console.log(
+            `[ML DEBUG] result section="${section.title}" classification="${completeness.classification}" score=${completeness.completenessScore}`
+          );
+        }
 
         if (completeness && !completeness.isComplete && completeness.completenessScore > 0.6) {
           errors.push({

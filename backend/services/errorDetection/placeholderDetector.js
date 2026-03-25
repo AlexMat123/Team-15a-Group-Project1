@@ -97,6 +97,25 @@ const patterns = [
   },
 ];
 
+const isStandaloneToken = (line = '', token = '') => {
+  if (!line || !token) return true;
+  const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const surrounding = line.replace(new RegExp(escapedToken, 'i'), '').trim();
+  return surrounding.length < 15;
+};
+
+const GUIDANCE_EXCEPTIONS = [
+  /risk level estimator/i,
+  /simple risk level estimator/i,
+  /likelihood of fire/i,
+  /potential consequences/i,
+  /trivial.*tolerable.*moderate/i,
+  /the following simple risk level estimator is based on/i,
+];
+
+const isGuidanceException = (text = '') =>
+  GUIDANCE_EXCEPTIONS.some((pattern) => pattern.test(text));
+
 const detect = (text) => {
   const errors = [];
   const lines = text.split('\n');
@@ -108,8 +127,21 @@ const detect = (text) => {
     while ((match = regex.exec(text)) !== null) {
       const beforeMatch = text.substring(0, match.index);
       const lineNumber = beforeMatch.split('\n').length;
-      
+      const line = lines[lineNumber - 1] || '';
+
+      if (pattern.name === 'TBD placeholder' && !isStandaloneToken(line, match[0])) {
+        continue;
+      }
+
+      if (pattern.name === 'Section guidance' && isGuidanceException(line)) {
+        continue;
+      }
+
       const section = findSection(lines, lineNumber);
+
+      if (process.env.DEBUG_PLACEHOLDER_GUIDANCE === 'true' && pattern.name === 'Section guidance') {
+        console.log(`GUIDANCE MATCH IN: ${section || 'Unknown'} | MATCHED TEXT: ${match[0]}`);
+      }
 
       errors.push({
         type: 'placeholder',

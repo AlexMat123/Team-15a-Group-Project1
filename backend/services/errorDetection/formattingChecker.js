@@ -4,6 +4,7 @@ const patterns = [
     regex: /\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b/g,
     severity: 'low',
     suggestion: 'Use consistent date format (e.g., 8th July 2022)',
+    maxIndividual: 2,
   },
   {
     name: 'Double spaces',
@@ -59,6 +60,23 @@ const detect = (text) => {
       matchCount++;
       
       if (pattern.skipCount && matchCount > 3) {
+        continue;
+      }
+
+       if (pattern.maxIndividual && matchCount > pattern.maxIndividual) {
+        if (!reportedPatterns.has(pattern.name)) {
+          reportedPatterns.add(pattern.name);
+          errors.push({
+            type: 'formatting',
+            severity: pattern.severity,
+            message: `Additional instances of ${pattern.name.toLowerCase()} found`,
+            location: {
+              section: 'Multiple locations',
+            },
+            suggestion: pattern.suggestion,
+            originalText: `${matchCount}+ instances`,
+          });
+        }
         continue;
       }
 
