@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Team = require('../models/Team');
 const User = require('../models/User');
+const Report = require('../models/Report');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 // GET /api/teams/my-team — get the logged-in user's team with members
@@ -87,6 +88,47 @@ router.delete('/my-team/members/:userId', protect, authorize('team_leader'), asy
       .lean();
 
     res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/teams/my-team/stats — team lead gets team-specific stats
+router.get('/my-team/stats', protect, authorize('team_leader'), async (req, res) => {
+  try {
+    const team = await Team.findOne({ teamLead: req.user._id });
+    if (!team) {
+      return res.status(403).json({ message: 'You are not a team lead' });
+    }
+
+    const memberIds = team.members.map(m => m.toString());
+    const reports = await Report.find({ analyzedBy: { $in: memberIds } });
+
+    const totalReports = reports.length;
+    const totalErrors = reports.reduce((sum, r) => sum + (r.errorCount || 0), 0);
+    const totalTimeSaved = reports.reduce((sum, r) => sum + (r.timeSaved || 0), 0);
+
+    const errorBreakdown = [
+      { name: 'Placeholder', value: reports.reduce((sum, r) => sum + (r.errorSummary?.placeholder || 0), 0) },
+      { name: 'Consistency', value: reports.reduce((sum, r) => sum + (r.errorSummary?.consistency || 0), 0) },
+      { name: 'Compliance', value: reports.reduce((sum, r) => sum + (r.errorSummary?.compliance || 0), 0) },
+      { name: 'Formatting', value: reports.reduce((sum, r) => sum + (r.errorSummary?.formatting || 0), 0) },
+      { name: 'Missing Data', value: reports.reduce((sum, r) => sum + (r.errorSummary?.missing_data || 0), 0) },
+    ];
+
+    const manualTime = parseFloat((totalTimeSaved / 0.16).toFixed(1));
+    const timeSavedPercent = manualTime > 0 ? Math.round((totalTimeSaved / manualTime) * 100) : 0;
+
+    res.json({
+      totalMembers: memberIds.length,
+      totalReports,
+      totalErrors,
+      timeSaved: Math.round(totalTimeSaved),
+      manualTime,
+      aiTime: Math.round(manualTime - totalTimeSaved),
+      timeSavedPercent,
+      errorBreakdown,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
