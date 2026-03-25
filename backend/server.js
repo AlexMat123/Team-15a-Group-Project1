@@ -29,6 +29,14 @@ app.get('/', (req, res) => {
   res.json({ message: 'Welcome to QC Checker API' });
 });
 
+app.get('/api/health', (req, res) => {
+  const mlService = require('./services/mlService');
+  res.json({
+    status: 'ok',
+    mlReady: mlService.isModelReady(),
+  });
+});
+
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ message: 'Something went wrong!' });
@@ -38,4 +46,10 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  
+  if (process.env.PRELOAD_ML !== 'false') {
+    console.log('Preloading ML models in background...');
+    const mlService = require('./services/mlService');
+    mlService.preloadModels();
+  }
 });

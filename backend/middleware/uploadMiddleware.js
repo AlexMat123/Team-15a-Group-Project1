@@ -1,6 +1,9 @@
 const multer = require('multer');
 const path = require('path');
 
+const MAX_PDF_SIZE_MB = 120;
+const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, 'uploads/');
@@ -24,14 +27,14 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024,
+    fileSize: MAX_PDF_SIZE_BYTES,
   },
 });
 
 const handleUploadError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ message: 'File too large. Maximum size is 10MB.' });
+      return res.status(400).json({ message: `File too large. Maximum size is ${MAX_PDF_SIZE_MB}MB.`  });
     }
     return res.status(400).json({ message: err.message });
   }

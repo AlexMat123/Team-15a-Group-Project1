@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { 
-  FileText, 
-  ArrowLeft, 
-  Clock, 
-  AlertCircle, 
-  CheckCircle, 
+import {
+  FileText,
+  ArrowLeft,
+  Clock,
+  AlertCircle,
+  CheckCircle,
   Loader2,
   AlertTriangle,
   FileWarning,
   Type,
-  Database
+  Database,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -19,14 +21,19 @@ import api from '../services/api';
 const ReportDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [expandedTypes, setExpandedTypes] = useState({});
 
   useEffect(() => {
     fetchReport();
   }, [id]);
+
+  useEffect(() => {
+    setExpandedTypes({});
+  }, [report?._id]);
 
   const fetchReport = async () => {
     try {
@@ -56,10 +63,10 @@ const ReportDetail = () => {
       analyzed: { color: 'bg-green-100 text-green-800', icon: CheckCircle, text: 'Analyzed' },
       failed: { color: 'bg-red-100 text-red-800', icon: AlertCircle, text: 'Failed' },
     };
-    
+
     const badge = badges[status] || badges.pending;
     const Icon = badge.icon;
-    
+
     return (
       <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${badge.color}`}>
         <Icon className={`w-4 h-4 mr-2 ${status === 'processing' ? 'animate-spin' : ''}`} />
@@ -79,13 +86,75 @@ const ReportDetail = () => {
     return icons[type] || AlertCircle;
   };
 
-  const getErrorColor = (severity) => {
+  const getErrorColor = (type) => {
     const colors = {
-      high: 'bg-red-100 text-red-800 border-red-200',
-      medium: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      low: 'bg-blue-100 text-blue-800 border-blue-200',
+      placeholder: 'bg-orange-50 text-orange-800 border-orange-200',
+      consistency: 'bg-blue-50 text-blue-800 border-blue-200',
+      compliance: 'bg-red-50 text-red-800 border-red-200',
+      formatting: 'bg-purple-50 text-purple-800 border-purple-200',
+      missing_data: 'bg-green-50 text-green-800 border-green-200',
     };
-    return colors[severity] || colors.medium;
+    return colors[type] || 'bg-gray-50 text-gray-800 border-gray-200';
+  };
+
+  const getSortedErrorsByType = (errors = []) => {
+    const typeOrder = {
+      placeholder: 0,
+      consistency: 1,
+      compliance: 2,
+      formatting: 3,
+      missing_data: 4,
+    };
+
+    return [...errors].sort((a, b) => {
+      const orderA = typeOrder[a.type] ?? 99;
+      const orderB = typeOrder[b.type] ?? 99;
+
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+
+      return (a.message || '').localeCompare(b.message || '');
+    });
+  };
+
+  const getErrorTypeLabel = (type) => {
+    const labels = {
+      placeholder: 'Placeholder',
+      consistency: 'Consistency',
+      compliance: 'Compliance',
+      formatting: 'Formatting',
+      missing_data: 'Missing Data',
+    };
+
+    return labels[type] || type?.replace('_', ' ') || 'Other';
+  };
+
+  const getGroupedErrorsByType = (errors = []) => {
+    const grouped = {};
+
+    getSortedErrorsByType(errors).forEach((err) => {
+      const key = err?.type || 'other';
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(err);
+    });
+
+    return grouped;
+  };
+
+  const toggleType = (type) => {
+    setExpandedTypes((prev) => ({
+      ...prev,
+      [type]: !prev[type],
+    }));
+  };
+
+  const setAllTypesExpanded = (errors = [], expanded = false) => {
+    const nextState = {};
+    Object.keys(getGroupedErrorsByType(errors)).forEach((type) => {
+      nextState[type] = expanded;
+    });
+    setExpandedTypes(nextState);
   };
 
   if (loading) {
@@ -125,7 +194,7 @@ const ReportDetail = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
-      
+
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         <Link
           to="/dashboard"
@@ -179,50 +248,6 @@ const ReportDetail = () => {
           </div>
         )}
 
-        {report.status === 'analyzed' && report.errors && report.errors.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Errors Detected ({report.errors.length})
-            </h2>
-            
-            <div className="space-y-4">
-              {report.errors.map((err, index) => {
-                const ErrorIcon = getErrorIcon(err.type);
-                return (
-                  <div
-                    key={err._id || index}
-                    className={`border rounded-lg p-4 ${getErrorColor(err.severity)}`}
-                  >
-                    <div className="flex items-start">
-                      <ErrorIcon className="w-5 h-5 mr-3 mt-0.5" />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium capitalize">{err.type.replace('_', ' ')}</span>
-                          <span className="text-xs px-2 py-1 bg-white rounded-full capitalize">
-                            {err.severity}
-                          </span>
-                        </div>
-                        <p className="mt-1">{err.message}</p>
-                        {err.location?.section && (
-                          <p className="text-sm mt-2 opacity-75">
-                            Location: {err.location.section}
-                            {err.location.page && ` • Page ${err.location.page}`}
-                          </p>
-                        )}
-                        {err.suggestion && (
-                          <p className="text-sm mt-2 italic">
-                            Suggestion: {err.suggestion}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {report.status === 'analyzed' && (!report.errors || report.errors.length === 0) && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-6 mb-6">
             <div className="flex items-center">
@@ -236,7 +261,7 @@ const ReportDetail = () => {
         )}
 
         {report.errorSummary && report.errorCount > 0 && (
-          <div className="bg-white rounded-xl shadow-sm p-6">
+          <div className="bg-white rounded-xl shadow-sm p-6 my-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Error Summary</h2>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="text-center p-4 bg-orange-50 rounded-lg">
@@ -259,6 +284,94 @@ const ReportDetail = () => {
                 <p className="text-2xl font-bold text-green-600">{report.errorSummary.missing_data || 0}</p>
                 <p className="text-sm text-gray-600">Missing Data</p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {report.status === 'analyzed' && report.errors && report.errors.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Errors Detected ({report.errors.length})
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  const grouped = getGroupedErrorsByType(report.errors);
+                  const hasCollapsed = Object.keys(grouped).some(
+                    (type) => !(expandedTypes[type] ?? false)
+                  );
+                  setAllTypesExpanded(report.errors, hasCollapsed);
+                }}
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+              >
+                {Object.keys(getGroupedErrorsByType(report.errors)).some(
+                  (type) => !(expandedTypes[type] ?? false)
+                )
+                  ? 'Expand all'
+                  : 'Collapse all'}
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {Object.entries(getGroupedErrorsByType(report.errors)).map(([type, typeErrors]) => {
+                const ErrorIcon = getErrorIcon(type);
+                const isExpanded = expandedTypes[type] ?? false;
+                const typeColorClass = getErrorColor(type);
+
+                return (
+                  <div key={type} className={`border rounded-lg overflow-hidden ${typeColorClass}`}>
+                    <button
+                      type="button"
+                      onClick={() => toggleType(type)}
+                      className={`w-full px-4 py-3 transition-colors flex items-center justify-between ${typeColorClass} hover:brightness-95`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <ErrorIcon className="w-4 h-4" />
+                        <span className="text-sm font-semibold">{getErrorTypeLabel(type)}</span>
+                        <span className="text-xs font-medium bg-white/80 px-2 py-0.5 rounded-full border border-white/70">
+                          {typeErrors.length}
+                        </span>
+                      </div>
+                      {isExpanded ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                    </button>
+
+                    {isExpanded && (
+                      <div className="p-4 space-y-3">
+                        {typeErrors.map((err, index) => {
+                          const ItemIcon = getErrorIcon(err.type);
+                          return (
+                            <div
+                              key={err._id || `${type}-${index}`}
+                              className="border rounded-lg p-4 bg-gray-50 text-gray-800 border-gray-200"
+                            >
+                              <div className="flex items-start">
+                                <ItemIcon className="w-5 h-5 mr-3 mt-0.5" />
+                                <div className="flex-1">
+                                  <p>{err.message}</p>
+                                  {err.location?.section && (
+                                    <p className="text-sm mt-2 opacity-75">
+                                      Location: {err.location.section}
+                                      {err.location.page && ` - Page ${err.location.page}`}
+                                    </p>
+                                  )}
+                                  {err.suggestion && (
+                                    <p className="text-sm mt-2 italic">Suggestion: {err.suggestion}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
