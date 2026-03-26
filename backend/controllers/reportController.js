@@ -1,5 +1,7 @@
 const Report = require('../models/Report');
 const { processDocument } = require('../services/pdfService');
+const { analyzeDocument } = require('../services/errorDetection');
+const { predictQualityFromTraining } = require('../services/trainingService');
 const fs = require('fs');
 const path = require('path');
 
@@ -40,15 +42,47 @@ const uploadReport = async (req, res) => {
 
 const processReportAsync = async (reportId, filePath) => {
   try {
+    console.log(`Processing report ${reportId}...`);
+    
     const documentData = await processDocument(filePath);
+    console.log(`Text extracted: ${documentData.wordCount} words`);
+
+    const analysisResults = await analyzeDocument(
+      documentData.text,
+      documentData.sections,
+      { headerFields: documentData.headerFields }
+    );
+    console.log(`Analysis complete: ${analysisResults.errorCount} errors found`);
+
+    const qualityAssessment = await predictQualityFromTraining(
+      documentData.text,
+      analysisResults
+    );
+    console.log(
+      `Quality prediction: ${qualityAssessment.label} (confidence ${qualityAssessment.confidence})`
+    );
 
     await Report.findByIdAndUpdate(reportId, {
       status: 'analyzed',
       extractedText: documentData.text,
+      errors: analysisResults.errors,
+      errorCount: analysisResults.errorCount,
+      errorSummary: analysisResults.errorSummary,
+      timeSaved: analysisResults.timeSaved,
+      qualityAssessment: {
+        label: qualityAssessment.label,
+        confidence: qualityAssessment.confidence,
+        goodScore: qualityAssessment.goodScore,
+        badScore: qualityAssessment.badScore,
+        matchedExamples: qualityAssessment.matchedExamples,
+        method: qualityAssessment.method || 'checklist-rule-good-profile',
+        evaluatedAt: new Date(),
+      },
       metadata: {
         pageCount: documentData.numPages,
         wordCount: documentData.wordCount,
         sections: documentData.sections.map(s => s.title),
+        headerFields: documentData.headerFields,
       },
     });
 

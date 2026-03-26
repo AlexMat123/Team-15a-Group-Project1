@@ -4,6 +4,8 @@ const User = require('../models/User');
 const Report = require('../models/Report');
 const Team = require('../models/Team');
 const { protect, authorize } = require('../middleware/authMiddleware');
+const TrainingExample = require('../models/TrainingExample');
+const { buildTrainingExamplesFromLabeledReports } = require('../services/trainingService');
 
 
 // GET /api/admin/stats
@@ -114,6 +116,32 @@ router.patch('/reports/:id/training', protect, authorize('admin'), async (req, r
     if (!report) return res.status(404).json({ message: 'Report not found' });
 
     res.json({ message: 'Report added to training', report });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/training/sync
+router.post('/training/sync', protect, authorize('admin'), async (req, res) => {
+  try {
+    const result = await buildTrainingExamplesFromLabeledReports();
+    const stats = await TrainingExample.getTrainingStats();
+
+    res.json({
+      message: 'Training examples synced from labeled reports',
+      result,
+      stats,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/training/stats
+router.get('/training/stats', protect, authorize('admin'), async (req, res) => {
+  try {
+    const stats = await TrainingExample.getTrainingStats();
+    res.json(stats);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -36,6 +36,15 @@ const Header = () => {
                     Dashboard
                   </Link>
                 )}
+
+                <Link
+                  to="/profile"
+                  className="text-sm text-gray-600 hover:text-gray-900"
+                >
+                  Profile
+                </Link>
+
+
                 <button
                   onClick={logout}
                   className="text-sm text-gray-600 hover:text-gray-900"

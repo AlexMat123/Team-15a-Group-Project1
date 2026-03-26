@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { Upload, FileText, Trash2, Clock, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import api from '../services/api';
 
+const REPORT_REFRESH_INTERVAL_MS = 4000;
+
 const Dashboard = () => {
-  const { user } = useAuth();
   const fileInputRef = useRef(null);
   
   const [reports, setReports] = useState([]);
@@ -18,18 +18,35 @@ const Dashboard = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const MAX_PDF_SIZE_MB = 120;
+  const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
+
   useEffect(() => {
     fetchReports();
   }, []);
 
-  const fetchReports = async () => {
+  useEffect(() => {
+    if (!reports.some((report) => ['pending', 'processing'].includes(report.status))) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      fetchReports({ silent: true });
+    }, REPORT_REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [reports]);
+
+  const fetchReports = async ({ silent = false } = {}) => {
     try {
       const response = await api.get('/reports');
       setReports(response.data);
     } catch (err) {
       console.error('Error fetching reports:', err);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -68,10 +85,11 @@ const Dashboard = () => {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setError('File size must be less than 10MB');
+    if (file.size > MAX_PDF_SIZE_BYTES) {
+      setError(`File size must be less than ${MAX_PDF_SIZE_MB}MB`);
       return;
     }
+
 
     setUploading(true);
     setUploadProgress(0);
@@ -93,7 +111,8 @@ const Dashboard = () => {
       });
 
       setSuccess(`${file.name} uploaded successfully!`);
-      fetchReports();
+      setReports((currentReports) => [response.data, ...currentReports]);
+      fetchReports({ silent: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Upload failed. Please try again.');
     } finally {
@@ -147,6 +166,27 @@ const Dashboard = () => {
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}>
         <Icon className={`w-3 h-3 mr-1 ${status === 'processing' ? 'animate-spin' : ''}`} />
+        {badge.text}
+      </span>
+    );
+  };
+
+  const getQualityBadge = (report) => {
+    if (report.status !== 'analyzed') {
+      return <span className="text-sm text-gray-400">Pending</span>;
+    }
+
+    const label = report.qualityAssessment?.label;
+    const badges = {
+      good: { text: 'Passed', color: 'bg-green-100 text-green-800' },
+      bad: { text: 'Failed', color: 'bg-red-100 text-red-800' },
+      uncertain: { text: 'Uncertain', color: 'bg-amber-100 text-amber-800' },
+    };
+
+    const badge = badges[label] || { text: 'Uncertain', color: 'bg-gray-100 text-gray-700' };
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}>
         {badge.text}
       </span>
     );
@@ -226,7 +266,7 @@ const Dashboard = () => {
                   Choose File
                 </label>
                 <p className="text-xs text-gray-400 mt-4">
-                  PDF files only, max 10MB
+                  PDF files only, max 120MB
                 </p>
               </>
             )}
@@ -259,6 +299,9 @@ const Dashboard = () => {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Errors
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Result
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Date
@@ -295,6 +338,9 @@ const Dashboard = () => {
                         ) : (
                           <span className="text-sm text-gray-400">-</span>
                         )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getQualityBadge(report)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(report.createdAt)}

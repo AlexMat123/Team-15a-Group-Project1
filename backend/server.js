@@ -22,11 +22,20 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
+app.use('/api/password-reset-requests', require('./routes/passwordResetRequestRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/teams', require('./routes/teamRoutes'));
 
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to QC Checker API' });
+});
+
+app.get('/api/health', (req, res) => {
+  const mlService = require('./services/mlService');
+  res.json({
+    status: 'ok',
+    mlReady: mlService.isModelReady(),
+  });
 });
 
 app.use((err, req, res, next) => {
@@ -38,4 +47,10 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  
+  if (process.env.PRELOAD_ML !== 'false') {
+    console.log('Preloading ML models in background...');
+    const mlService = require('./services/mlService');
+    mlService.preloadModels();
+  }
 });

@@ -88,10 +88,28 @@ const reportSchema = new mongoose.Schema(
       enum: ['good', 'bad', null],
       default: null,
     },
+    qualityAssessment: {
+      label: {
+        type: String,
+        enum: ['good', 'bad', 'uncertain', null],
+        default: null,
+      },
+      confidence: { type: Number, default: 0 },
+      goodScore: { type: Number, default: 0 },
+      badScore: { type: Number, default: 0 },
+      matchedExamples: { type: Number, default: 0 },
+      method: { type: String, default: 'checklist-rule-good-profile' },
+      evaluatedAt: { type: Date },
+    },
     metadata: {
       pageCount: { type: Number, default: 0 },
       wordCount: { type: Number, default: 0 },
       sections: [String],
+      headerFields: {
+        visitDate: { type: String, default: '' },
+        referenceNumber: { type: String, default: '' },
+        consultant: { type: String, default: '' },
+      },
     },
   },
   {

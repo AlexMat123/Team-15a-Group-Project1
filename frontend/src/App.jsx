@@ -8,6 +8,7 @@ import ReportDetail from './pages/ReportDetail';
 import AdminDashboard from './pages/AdminDashboard';
 import Unauthorized from './pages/Unauthorized';
 import TeamPage from './pages/TeamPage';
+import Profile from './pages/Profile'; 
 
 function App() {
   return (
@@ -57,6 +58,15 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['admin', 'team_leader']}>
                 <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile/>
               </ProtectedRoute>
             }
           />
