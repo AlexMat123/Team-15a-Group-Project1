@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Report = require('../models/Report');
+const Team = require('../models/Team');
+const { protect, authorize } = require('../middleware/authMiddleware');
 const TrainingExample = require('../models/TrainingExample');
 const { buildTrainingExamplesFromLabeledReports } = require('../services/trainingService');
-const { protect, authorize } = require('../middleware/authMiddleware');
+const { sendTeamAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
 
 
 // GET /api/admin/stats
@@ -164,5 +166,239 @@ router.patch('/users/:id/status', protect, authorize('admin'), async (req, res) 
   }
 });
 
+// GET /api/admin/teams
+router.get('/teams', protect, authorize('admin'), async (req, res) => {
+  try {
+    const teams = await Team.find()
+      .populate('createdBy', 'name email')
+      .populate('members', 'name email role')
+      .populate('teamLead', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(teams);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/teams
+router.post('/teams', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: 'Team name is required' });
+    }
+
+    const existing = await Team.findOne({ name: name.trim() });
+    if (existing) {
+      return res.status(409).json({ message: 'A team with that name already exists' });
+    }
+
+    const team = await Team.create({
+      name: name.trim(),
+      createdBy: req.user._id,
+    });
+
+    res.status(201).json(team);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/admin/teams/:id/members
+router.patch('/teams/:id/members', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { memberIds } = req.body;
+
+    if (!Array.isArray(memberIds)) {
+      return res.status(400).json({ message: 'memberIds must be an array' });
+    }
+
+    const team = await Team.findById(req.params.id);
+    if (!team) return res.status(404).json({ message: 'Team not found' });
+
+    // Merge new members with existing, avoiding duplicates
+    const existingIds = team.members.map(id => id.toString());
+    const newIds = memberIds.filter(id => !existingIds.includes(id));
+    team.members.push(...newIds);
+    await team.save();
+
+    // Send team assignment emails to newly added members
+    if (newIds.length > 0) {
+      const newMembers = await User.find({ _id: { $in: newIds } }).select('email role').lean();
+      const loginUrl = `${process.env.FRONTEND_URL}/login`;
+
+      for (const member of newMembers) {
+        try {
+          await sendTeamAssignmentEmail({
+            to: member.email,
+            teamName: team.name,
+            role: member.role,
+            loginUrl,
+          });
+        } catch (emailErr) {
+          console.error(`Failed to send team assignment email to ${member.email}:`, emailErr.message);
+        }
+      }
+    }
+
+    const updated = await Team.findById(team._id)
+      .populate('createdBy', 'name email')
+      .populate('members', 'name email role')
+      .populate('teamLead', 'name email')
+      .lean();
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/teams/:id/members/:userId
+router.delete('/teams/:id/members/:userId', protect, authorize('admin'), async (req, res) => {
+  try {
+    const team = await Team.findById(req.params.id);
+    if (!team) return res.status(404).json({ message: 'Team not found' });
+
+    // Get the removed user's email before removing them
+    const removedUser = await User.findById(req.params.userId).select('email').lean();
+
+    team.members = team.members.filter(m => m.toString() !== req.params.userId);
+
+    // Clear teamLead if the removed member was the lead and revert their role
+    if (team.teamLead && team.teamLead.toString() === req.params.userId) {
+      await User.findByIdAndUpdate(req.params.userId, { role: 'user' });
+      team.teamLead = null;
+    }
+
+    await team.save();
+
+    // Send removal email
+    if (removedUser) {
+      try {
+        await sendTeamRemovalEmail({ to: removedUser.email, teamName: team.name });
+      } catch (emailErr) {
+        console.error(`Failed to send team removal email to ${removedUser.email}:`, emailErr.message);
+      }
+    }
+
+    const updated = await Team.findById(team._id)
+      .populate('createdBy', 'name email')
+      .populate('members', 'name email role')
+      .populate('teamLead', 'name email')
+      .lean();
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/admin/teams/:id/lead
+router.patch('/teams/:id/lead', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const team = await Team.findById(req.params.id);
+    if (!team) return res.status(404).json({ message: 'Team not found' });
+
+    if (!team.members.map(m => m.toString()).includes(userId)) {
+      return res.status(400).json({ message: 'User must be a member of the team' });
+    }
+
+    // Revert previous lead back to 'user' role
+    if (team.teamLead && team.teamLead.toString() !== userId) {
+      await User.findByIdAndUpdate(team.teamLead, { role: 'user' });
+    }
+
+    // Set new lead's role to 'team_leader'
+    await User.findByIdAndUpdate(userId, { role: 'team_leader' });
+
+    team.teamLead = userId;
+    await team.save();
+
+    // Send email notifying the new team lead
+    try {
+      const leadUser = await User.findById(userId).select('email').lean();
+      await sendTeamAssignmentEmail({
+        to: leadUser.email,
+        teamName: team.name,
+        role: 'team_leader',
+        loginUrl: `${process.env.FRONTEND_URL}/login`,
+      });
+    } catch (emailErr) {
+      console.error(`Failed to send team lead assignment email:`, emailErr.message);
+    }
+
+    const updated = await Team.findById(team._id)
+      .populate('createdBy', 'name email')
+      .populate('members', 'name email role')
+      .populate('teamLead', 'name email')
+      .lean();
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/teams/:id
+router.delete('/teams/:id', protect, authorize('admin'), async (req, res) => {
+  try {
+    const team = await Team.findById(req.params.id);
+    if (!team) return res.status(404).json({ message: 'Team not found' });
+
+    // Revert team lead role back to 'user'
+    if (team.teamLead) {
+      await User.findByIdAndUpdate(team.teamLead, { role: 'user' });
+    }
+
+    await team.deleteOne();
+
+    res.json({ message: 'Team deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/teams/:id/stats
+router.get('/teams/:id/stats', protect, authorize('admin'), async (req, res) => {
+  try {
+    const team = await Team.findById(req.params.id);
+    if (!team) return res.status(404).json({ message: 'Team not found' });
+
+    const memberIds = team.members.map(m => m.toString());
+    const reports = await Report.find({ analyzedBy: { $in: memberIds } });
+
+    const totalReports = reports.length;
+    const totalErrors = reports.reduce((sum, r) => sum + (r.errorCount || 0), 0);
+    const totalTimeSaved = reports.reduce((sum, r) => sum + (r.timeSaved || 0), 0);
+
+    const errorBreakdown = [
+      { name: 'Placeholder', value: reports.reduce((sum, r) => sum + (r.errorSummary?.placeholder || 0), 0) },
+      { name: 'Consistency', value: reports.reduce((sum, r) => sum + (r.errorSummary?.consistency || 0), 0) },
+      { name: 'Compliance', value: reports.reduce((sum, r) => sum + (r.errorSummary?.compliance || 0), 0) },
+      { name: 'Formatting', value: reports.reduce((sum, r) => sum + (r.errorSummary?.formatting || 0), 0) },
+      { name: 'Missing Data', value: reports.reduce((sum, r) => sum + (r.errorSummary?.missing_data || 0), 0) },
+    ];
+
+    const manualTime = parseFloat((totalTimeSaved / 0.16).toFixed(1));
+    const timeSavedPercent = manualTime > 0 ? Math.round((totalTimeSaved / manualTime) * 100) : 0;
+
+    res.json({
+      totalMembers: memberIds.length,
+      totalReports,
+      totalErrors,
+      timeSaved: Math.round(totalTimeSaved),
+      manualTime,
+      aiTime: Math.round(manualTime - totalTimeSaved),
+      timeSavedPercent,
+      errorBreakdown,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

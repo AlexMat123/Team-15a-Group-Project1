@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import ReportDetail from './pages/ReportDetail';
 import AdminDashboard from './pages/AdminDashboard';
 import Unauthorized from './pages/Unauthorized';
+import TeamPage from './pages/TeamPage';
 import Profile from './pages/Profile'; 
 
 function App() {
@@ -43,6 +44,15 @@ function App() {
             }
           />
           
+          <Route
+            path="/team"
+            element={
+              <ProtectedRoute>
+                <TeamPage />
+              </ProtectedRoute>
+            }
+          />
+
           <Route
             path="/admin"
             element={

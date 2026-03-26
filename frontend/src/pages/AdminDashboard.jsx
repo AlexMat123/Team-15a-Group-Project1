@@ -31,6 +31,7 @@ const tabs = [
   { id: 'manage', label: 'Manage' },
   { id: 'reports', label: 'Reports' },
   { id: 'training', label: 'AI Training' },
+  { id: 'teams', label: 'Teams' },
 ];
 
 const COLORS = ['#6366f1', '#f59e0b', '#ef4444', '#10b981', '#3b82f6'];
@@ -79,6 +80,7 @@ const AdminDashboard = () => {
   const [openTrainingMenu, setOpenTrainingMenu] = useState(null);
   const [users, setUsers] = useState([]);
   const [reports, setReports] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingReports, setLoadingReports] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -107,6 +109,25 @@ const AdminDashboard = () => {
     ],
   });
 
+  // --- Teams state ---
+  const [newTeamName, setNewTeamName] = useState('');
+  const [teamError, setTeamError] = useState('');
+  const [teamCreating, setTeamCreating] = useState(false);
+  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
+  const [manageTeamId, setManageTeamId] = useState(null);
+  const [showAddMembers, setShowAddMembers] = useState(false);
+  const [addMemberSearch, setAddMemberSearch] = useState('');
+  const [selectedMemberIds, setSelectedMemberIds] = useState([]);
+  const [addingMembers, setAddingMembers] = useState(false);
+  const [showViewMembers, setShowViewMembers] = useState(false);
+  const [confirmRemoveMember, setConfirmRemoveMember] = useState(null);
+  const [showAssignLead, setShowAssignLead] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState(null);
+  const [confirmLead, setConfirmLead] = useState(null);
+  const [confirmDeleteTeam, setConfirmDeleteTeam] = useState(false);
+  const [showTeamAnalytics, setShowTeamAnalytics] = useState(false);
+  const [teamStats, setTeamStats] = useState(null);
+  const [teamStatsLoading, setTeamStatsLoading] = useState(false);
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -119,6 +140,15 @@ const AdminDashboard = () => {
       setErrorMessage(error.response?.data?.message || 'Failed to load users');
     } finally {
       setLoadingUsers(false);
+    }
+  };
+
+  const fetchTeams = async () => {
+    try {
+      const response = await api.get('/admin/teams');
+      setTeams(response.data);
+    } catch (error) {
+      console.error('Failed to load teams:', error);
     }
   };
 
@@ -221,6 +251,7 @@ const AdminDashboard = () => {
     fetchUsers();
     fetchPasswordResetRequest();
     fetchDashboardData();
+    fetchTeams();
   }, []);
 
   const stats = [
@@ -383,6 +414,109 @@ const AdminDashboard = () => {
       setOpenTrainingMenu(null);
     } catch (error) {
       setReportsError(error.response?.data?.message || 'Failed to add report to training');
+    }
+  };
+
+  // --- Team handler functions ---
+  const handleCreateTeam = async (e) => {
+    e.preventDefault();
+    setTeamError('');
+
+    if (!newTeamName.trim()) {
+      setTeamError('Team name is required');
+      return;
+    }
+
+    setTeamCreating(true);
+    try {
+      const res = await api.post('/admin/teams', { name: newTeamName });
+      setTeams(prev => [res.data, ...prev]);
+      setNewTeamName('');
+      setShowCreateTeamModal(false);
+    } catch (err) {
+      setTeamError(err.response?.data?.message || 'Failed to create team');
+    } finally {
+      setTeamCreating(false);
+    }
+  };
+
+  const handleOpenAddMembers = () => {
+    const team = teams.find(t => t._id === manageTeamId);
+    const existingIds = (team?.members || []).map(m => m._id || m);
+    setSelectedMemberIds(existingIds);
+    setAddMemberSearch('');
+    setShowAddMembers(true);
+  };
+
+  const toggleMemberSelection = (userId) => {
+    setSelectedMemberIds(prev =>
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const handleAddMembers = async () => {
+    setAddingMembers(true);
+    try {
+      const res = await api.patch(`/admin/teams/${manageTeamId}/members`, { memberIds: selectedMemberIds });
+      setTeams(prev => prev.map(t => t._id === manageTeamId ? res.data : t));
+      setShowAddMembers(false);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to add members');
+    } finally {
+      setAddingMembers(false);
+    }
+  };
+
+  const handleRemoveMember = async (userId) => {
+    try {
+      const res = await api.delete(`/admin/teams/${manageTeamId}/members/${userId}`);
+      setTeams(prev => prev.map(t => t._id === manageTeamId ? res.data : t));
+      setConfirmRemoveMember(null);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to remove member');
+    }
+  };
+
+  const handleOpenAssignLead = () => {
+    const team = teams.find(t => t._id === manageTeamId);
+    setSelectedLeadId(team?.teamLead?._id || null);
+    setConfirmLead(null);
+    setShowAssignLead(true);
+  };
+
+  const handleConfirmAssignLead = async () => {
+    try {
+      const res = await api.patch(`/admin/teams/${manageTeamId}/lead`, { userId: confirmLead._id });
+      setTeams(prev => prev.map(t => t._id === manageTeamId ? res.data : t));
+      setConfirmLead(null);
+      setShowAssignLead(false);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to assign team lead');
+    }
+  };
+
+  const handleOpenTeamAnalytics = async () => {
+    setTeamStatsLoading(true);
+    setShowTeamAnalytics(true);
+    try {
+      const res = await api.get(`/admin/teams/${manageTeamId}/stats`);
+      setTeamStats(res.data);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to load team analytics');
+      setShowTeamAnalytics(false);
+    } finally {
+      setTeamStatsLoading(false);
+    }
+  };
+
+  const handleDeleteTeam = async () => {
+    try {
+      await api.delete(`/admin/teams/${manageTeamId}`);
+      setTeams(prev => prev.filter(t => t._id !== manageTeamId));
+      setConfirmDeleteTeam(false);
+      setManageTeamId(null);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete team');
     }
   };
 
@@ -900,6 +1034,509 @@ const AdminDashboard = () => {
             <p className="text-sm mt-2">Use the Reports tab to add training examples.</p>
           </section>
         )}
+
+        {/* ── TEAMS TAB ── */}
+        {activeTab === 'teams' && (
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Teams</h2>
+              <button
+                onClick={() => { setTeamError(''); setNewTeamName(''); setShowCreateTeamModal(true); }}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
+              >
+                + Create Team
+              </button>
+            </div>
+
+            {teams.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-8">No teams created yet.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 bg-gray-50">
+                    <th className="pb-3 pt-3 px-2">TEAM NAME</th>
+                    <th className="pb-3 pt-3 px-2">CREATED</th>
+                    <th className="pb-3 pt-3 px-2">WARNING</th>
+                    <th className="pb-3 pt-3 px-2">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teams.map(t => (
+                    <tr key={t._id} className="border-b last:border-0 hover:bg-gray-50">
+                      <td className="py-4 px-2 text-gray-900 font-medium">{t.name}</td>
+                      <td className="py-4 px-2 text-gray-500">
+                        {new Date(t.createdAt).toLocaleDateString('en-GB', {
+                          day: 'numeric', month: 'short', year: 'numeric'
+                        })}
+                      </td>
+                      <td className="py-4 px-2">
+                        {!t.teamLead && (
+                          <span className="text-xs text-red-500 font-medium">No team lead assigned</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-2">
+                        <button
+                          onClick={() => setManageTeamId(manageTeamId === t._id ? null : t._id)}
+                          className="text-sm text-indigo-600 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50"
+                        >
+                          Manage Team
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {/* Manage Team Modal */}
+            {manageTeamId && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    {teams.find(t => t._id === manageTeamId)?.name}
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-5">Choose an action for this team</p>
+                  <div className="flex flex-col gap-2">
+                    <button onClick={handleOpenAddMembers} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                      Add Members
+                    </button>
+                    <button onClick={() => setShowViewMembers(true)} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                      View Members
+                    </button>
+                    <button onClick={handleOpenAssignLead} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                      Assign Team Lead
+                    </button>
+                    <button onClick={handleOpenTeamAnalytics} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                      View Analytics
+                    </button>
+                    <button onClick={() => setConfirmDeleteTeam(true)} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                      Delete Team
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setManageTeamId(null)}
+                    className="mt-4 w-full text-sm text-gray-600 border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                {/* Confirm Delete Team */}
+                {confirmDeleteTeam && (
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                    <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Team</h3>
+                      <p className="text-sm text-gray-600 mb-5">
+                        Are you sure you want to delete <span className="font-semibold">{teams.find(t => t._id === manageTeamId)?.name}</span>? This will remove the team and all its member associations. This action cannot be undone.
+                      </p>
+                      <div className="flex justify-end gap-3">
+                        <button
+                          onClick={() => setConfirmDeleteTeam(false)}
+                          className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleDeleteTeam}
+                          className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Add Members Overlay */}
+            {showAddMembers && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Add Members</h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    {teams.find(t => t._id === manageTeamId)?.name}
+                  </p>
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    value={addMemberSearch}
+                    onChange={(e) => setAddMemberSearch(e.target.value)}
+                    autoFocus
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                  <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                    {users
+                      .filter(u =>
+                        u.name?.toLowerCase().includes(addMemberSearch.toLowerCase()) ||
+                        u.email?.toLowerCase().includes(addMemberSearch.toLowerCase())
+                      )
+                      .map(u => {
+                        const isSelected = selectedMemberIds.includes(u._id);
+                        return (
+                          <label
+                            key={u._id}
+                            className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleMemberSelection(u._id)}
+                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                              <p className="text-xs text-gray-500">{u.email}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                  </div>
+                  <div className="flex justify-between items-center mt-4">
+                    <button
+                      onClick={() => setShowAddMembers(false)}
+                      className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleAddMembers}
+                      disabled={addingMembers}
+                      className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {addingMembers ? 'Adding...' : 'Add'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* View Members Overlay */}
+            {showViewMembers && manageTeamId && (() => {
+              const team = teams.find(t => t._id === manageTeamId);
+              const members = team?.members || [];
+              return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                  <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Team Members</h3>
+                    <p className="text-sm text-gray-500 mb-4">{team?.name}</p>
+                    {members.length === 0 ? (
+                      <p className="text-gray-400 text-sm text-center py-8">No members in this team yet.</p>
+                    ) : (
+                      <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                        {members.map(m => (
+                          <div key={m._id} className="flex items-center gap-3 px-4 py-3">
+                            <div className="bg-indigo-100 text-indigo-600 rounded-full h-8 w-8 flex items-center justify-center text-sm font-semibold">
+                              {m.name?.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-900">{m.name}</p>
+                              <p className="text-xs text-gray-500">{m.email}</p>
+                            </div>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                              m.role === 'team_leader'
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {m.role === 'team_leader' ? 'Team Leader' : 'User'}
+                            </span>
+                            <button
+                              onClick={() => setConfirmRemoveMember(m)}
+                              className="text-xs text-red-500 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => { setShowViewMembers(false); setConfirmRemoveMember(null); }}
+                      className="mt-4 px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Back
+                    </button>
+                  </div>
+
+                  {/* Confirm Remove Member */}
+                  {confirmRemoveMember && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
+                      <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Remove Member</h3>
+                        <p className="text-sm text-gray-600 mb-5">
+                          Are you sure you want to remove <span className="font-semibold">{confirmRemoveMember.name}</span> from this team? This action cannot be undone.
+                        </p>
+                        <div className="flex justify-end gap-3">
+                          <button
+                            onClick={() => setConfirmRemoveMember(null)}
+                            className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleRemoveMember(confirmRemoveMember._id)}
+                            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Assign Team Lead Overlay */}
+            {showAssignLead && manageTeamId && (() => {
+              const team = teams.find(t => t._id === manageTeamId);
+              const members = team?.members || [];
+              return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                  <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Assign Team Lead</h3>
+                    <p className="text-sm text-gray-500 mb-4">{team?.name}</p>
+                    {members.length === 0 ? (
+                      <p className="text-gray-400 text-sm text-center py-8">No members in this team. Add members first.</p>
+                    ) : (
+                      <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                        {members.map(m => {
+                          const isSelected = selectedLeadId === m._id;
+                          const isCurrentLead = team?.teamLead?._id === m._id;
+                          return (
+                            <label
+                              key={m._id}
+                              className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-indigo-50' : ''}`}
+                            >
+                              <input
+                                type="radio"
+                                name="teamLead"
+                                checked={isSelected}
+                                onChange={() => setSelectedLeadId(m._id)}
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <div className="bg-indigo-100 text-indigo-600 rounded-full h-8 w-8 flex items-center justify-center text-sm font-semibold">
+                                {m.name?.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900">{m.name}</p>
+                                <p className="text-xs text-gray-500">{m.email}</p>
+                              </div>
+                              {isCurrentLead && (
+                                <span className="text-xs text-indigo-600 font-medium bg-indigo-100 px-2 py-0.5 rounded-full">Current Lead</span>
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center mt-4">
+                      <button
+                        onClick={() => setShowAssignLead(false)}
+                        className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                      >
+                        Back
+                      </button>
+                      {members.length > 0 && (
+                        <button
+                          onClick={() => {
+                            const member = members.find(m => m._id === selectedLeadId);
+                            if (!member) return alert('Please select a member');
+                            setConfirmLead(member);
+                          }}
+                          className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
+                        >
+                          Assign
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Confirm Assign Lead */}
+                  {confirmLead && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
+                      <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Team Lead</h3>
+                        <p className="text-sm text-gray-600 mb-5">
+                          Are you sure you want to assign <span className="font-semibold">{confirmLead.name}</span> as the team lead for <span className="font-semibold">{team?.name}</span>?
+                        </p>
+                        <div className="flex justify-end gap-3">
+                          <button
+                            onClick={() => setConfirmLead(null)}
+                            className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleConfirmAssignLead}
+                            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                          >
+                            Confirm
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Team Analytics Overlay */}
+            {showTeamAnalytics && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Team Analytics</h3>
+                  <p className="text-sm text-gray-500 mb-5">{teams.find(t => t._id === manageTeamId)?.name}</p>
+
+                  {teamStatsLoading ? (
+                    <p className="text-gray-400 text-sm text-center py-8 animate-pulse">Loading analytics...</p>
+                  ) : teamStats ? (
+                    <>
+                      {/* Stat cards */}
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                          <div className="flex items-center">
+                            <div className="bg-blue-500 p-2.5 rounded-lg">
+                              <Users className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-xl font-bold text-gray-900">{teamStats.totalMembers}</p>
+                              <p className="text-xs text-gray-500">Members</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                          <div className="flex items-center">
+                            <div className="bg-green-500 p-2.5 rounded-lg">
+                              <FileText className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-xl font-bold text-gray-900">{teamStats.totalReports}</p>
+                              <p className="text-xs text-gray-500">Reports</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                          <div className="flex items-center">
+                            <div className="bg-red-500 p-2.5 rounded-lg">
+                              <AlertTriangle className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-xl font-bold text-gray-900">{teamStats.totalErrors}</p>
+                              <p className="text-xs text-gray-500">Errors Found</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                          <div className="flex items-center">
+                            <div className="bg-amber-500 p-2.5 rounded-lg">
+                              <Clock className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-xl font-bold text-gray-900">{teamStats.timeSaved}h</p>
+                              <p className="text-xs text-gray-500">Time Saved</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Charts */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div className="border border-gray-200 rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Most Common Errors</h4>
+                          <ResponsiveContainer width="100%" height={180}>
+                            <BarChart data={teamStats.errorBreakdown.map(e => ({ name: e.name, errors: e.value }))}>
+                              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                              <YAxis />
+                              <Tooltip />
+                              <Bar dataKey="errors" fill="#6366f1" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="border border-gray-200 rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Error Type Distribution</h4>
+                          <ResponsiveContainer width="100%" height={180}>
+                            <PieChart>
+                              <Pie data={teamStats.errorBreakdown} dataKey="value" nameKey="name" outerRadius={65} label={({ name, value }) => `${name}: ${value}`}>
+                                {teamStats.errorBreakdown.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                              </Pie>
+                              <Tooltip />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Time savings */}
+                      <div className="border border-gray-200 rounded-xl p-4">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Time Savings Analysis</h4>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="bg-purple-100 rounded-lg p-4 text-center">
+                            <p className="text-2xl font-bold text-indigo-600">{teamStats.manualTime}h</p>
+                            <p className="text-xs text-gray-500 mt-1">Manual Review Time</p>
+                          </div>
+                          <div className="bg-green-100 rounded-lg p-4 text-center">
+                            <p className="text-2xl font-bold text-green-600">{teamStats.aiTime}h</p>
+                            <p className="text-xs text-gray-500 mt-1">AI Review Time</p>
+                          </div>
+                          <div className="bg-purple-100 rounded-lg p-4 text-center">
+                            <p className="text-2xl font-bold text-purple-600">{teamStats.timeSavedPercent}%</p>
+                            <p className="text-xs text-gray-500 mt-1">Time Saved</p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+
+                  <button
+                    onClick={() => { setShowTeamAnalytics(false); setTeamStats(null); }}
+                    className="mt-4 px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Create Team Modal */}
+            {showCreateTeamModal && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Create a New Team</h3>
+                  <form onSubmit={handleCreateTeam}>
+                    <input
+                      type="text"
+                      placeholder="Enter team name..."
+                      value={newTeamName}
+                      onChange={(e) => setNewTeamName(e.target.value)}
+                      autoFocus
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                    {teamError && (
+                      <p className="text-red-500 text-sm mb-3">{teamError}</p>
+                    )}
+                    <div className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateTeamModal(false)}
+                        className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={teamCreating}
+                        className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {teamCreating ? 'Creating...' : 'Create'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
       </main>
 
       {showCreateUserModal && (

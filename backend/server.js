@@ -24,6 +24,7 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/password-reset-requests', require('./routes/passwordResetRequestRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/teams', require('./routes/teamRoutes'));
 
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to QC Checker API' });

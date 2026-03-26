@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const Team = require('../models/Team');
 const generateToken = require('../utils/generateToken');
 
 const login = async (req, res) => {
@@ -49,7 +50,12 @@ const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
       .select('-password')
-      .populate('managedBy', 'name email');
+      .populate('managedBy', 'name email')
+      .lean();
+
+    // Check if user belongs to any team
+    const team = await Team.findOne({ members: user._id }).select('_id name').lean();
+    user.team = team || null;
 
     res.json(user);
   } catch (error) {
