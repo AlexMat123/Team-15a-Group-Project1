@@ -1,15 +1,16 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-  service: process.env.SMTP_SERVICE || undefined,
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: process.env.SMTP_SECURE === 'true',
+  service: 'gmail',
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
 });
+
+transporter.verify()
+  .then(() => console.log('Email service ready'))
+  .catch((err) => console.error('Email service error:', err.message));
 
 const sendNewUserWelcomeEmail = async ({
   to,
