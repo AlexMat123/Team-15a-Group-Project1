@@ -6,6 +6,7 @@ const Team = require('../models/Team');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const TrainingExample = require('../models/TrainingExample');
 const { buildTrainingExamplesFromLabeledReports } = require('../services/trainingService');
+const { sendTeamAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
 
 
 // GET /api/admin/stats
@@ -224,6 +225,25 @@ router.patch('/teams/:id/members', protect, authorize('admin'), async (req, res)
     team.members.push(...newIds);
     await team.save();
 
+    // Send team assignment emails to newly added members
+    if (newIds.length > 0) {
+      const newMembers = await User.find({ _id: { $in: newIds } }).select('email role').lean();
+      const loginUrl = `${process.env.FRONTEND_URL}/login`;
+
+      for (const member of newMembers) {
+        try {
+          await sendTeamAssignmentEmail({
+            to: member.email,
+            teamName: team.name,
+            role: member.role,
+            loginUrl,
+          });
+        } catch (emailErr) {
+          console.error(`Failed to send team assignment email to ${member.email}:`, emailErr.message);
+        }
+      }
+    }
+
     const updated = await Team.findById(team._id)
       .populate('createdBy', 'name email')
       .populate('members', 'name email role')
@@ -242,6 +262,9 @@ router.delete('/teams/:id/members/:userId', protect, authorize('admin'), async (
     const team = await Team.findById(req.params.id);
     if (!team) return res.status(404).json({ message: 'Team not found' });
 
+    // Get the removed user's email before removing them
+    const removedUser = await User.findById(req.params.userId).select('email').lean();
+
     team.members = team.members.filter(m => m.toString() !== req.params.userId);
 
     // Clear teamLead if the removed member was the lead and revert their role
@@ -251,6 +274,15 @@ router.delete('/teams/:id/members/:userId', protect, authorize('admin'), async (
     }
 
     await team.save();
+
+    // Send removal email
+    if (removedUser) {
+      try {
+        await sendTeamRemovalEmail({ to: removedUser.email, teamName: team.name });
+      } catch (emailErr) {
+        console.error(`Failed to send team removal email to ${removedUser.email}:`, emailErr.message);
+      }
+    }
 
     const updated = await Team.findById(team._id)
       .populate('createdBy', 'name email')
@@ -285,6 +317,19 @@ router.patch('/teams/:id/lead', protect, authorize('admin'), async (req, res) =>
 
     team.teamLead = userId;
     await team.save();
+
+    // Send email notifying the new team lead
+    try {
+      const leadUser = await User.findById(userId).select('email').lean();
+      await sendTeamAssignmentEmail({
+        to: leadUser.email,
+        teamName: team.name,
+        role: 'team_leader',
+        loginUrl: `${process.env.FRONTEND_URL}/login`,
+      });
+    } catch (emailErr) {
+      console.error(`Failed to send team lead assignment email:`, emailErr.message);
+    }
 
     const updated = await Team.findById(team._id)
       .populate('createdBy', 'name email')

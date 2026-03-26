@@ -91,7 +91,65 @@ You will be asked to change your password when you log in.
   });
 };
 
+const sendTeamAssignmentEmail = async ({
+  to,
+  teamName,
+  role,
+  loginUrl,
+}) => {
+  const roleLabel = role === 'team_leader' ? 'Team Leader' : 'Member';
+  const subject = `You have been assigned to team "${teamName}"`;
+
+  const text = `
+You have been assigned to a team on the QC Checker platform.
+
+Team: ${teamName}
+Your role: ${roleLabel}
+Login link: ${loginUrl}
+  `.trim();
+
+  const html = `
+    <p>You have been assigned to a team on the <strong>QC Checker</strong> platform.</p>
+    <p><strong>Team:</strong> ${teamName}</p>
+    <p><strong>Your role:</strong> ${roleLabel}</p>
+    <p><strong>Login link:</strong> <a href="${loginUrl}">${loginUrl}</a></p>
+  `;
+
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM,
+    to,
+    subject,
+    text,
+    html,
+  });
+};
+
+const sendTeamRemovalEmail = async ({ to, teamName }) => {
+  const subject = `You have been removed from team "${teamName}"`;
+
+  const text = `
+You have been removed from the team "${teamName}" on the QC Checker platform.
+
+If you believe this was a mistake, please contact your administrator.
+  `.trim();
+
+  const html = `
+    <p>You have been removed from the team <strong>"${teamName}"</strong> on the <strong>QC Checker</strong> platform.</p>
+    <p>If you believe this was a mistake, please contact your administrator.</p>
+  `;
+
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM,
+    to,
+    subject,
+    text,
+    html,
+  });
+};
+
 module.exports = {
   sendNewUserWelcomeEmail,
   sendPasswordResetEmail,
+  sendTeamAssignmentEmail,
+  sendTeamRemovalEmail,
 };

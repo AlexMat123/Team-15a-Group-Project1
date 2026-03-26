@@ -4,6 +4,7 @@ const Team = require('../models/Team');
 const User = require('../models/User');
 const Report = require('../models/Report');
 const { protect, authorize } = require('../middleware/authMiddleware');
+const { sendTeamAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
 
 // GET /api/teams/my-team — get the logged-in user's team with members
 router.get('/my-team', protect, async (req, res) => {
@@ -55,6 +56,25 @@ router.patch('/my-team/members', protect, authorize('team_leader'), async (req, 
     team.members.push(...newIds);
     await team.save();
 
+    // Send team assignment emails to newly added members
+    if (newIds.length > 0) {
+      const newMembers = await User.find({ _id: { $in: newIds } }).select('email role').lean();
+      const loginUrl = `${process.env.FRONTEND_URL}/login`;
+
+      for (const member of newMembers) {
+        try {
+          await sendTeamAssignmentEmail({
+            to: member.email,
+            teamName: team.name,
+            role: member.role,
+            loginUrl,
+          });
+        } catch (emailErr) {
+          console.error(`Failed to send team assignment email to ${member.email}:`, emailErr.message);
+        }
+      }
+    }
+
     const updated = await Team.findById(team._id)
       .populate('members', 'name email role')
       .populate('teamLead', 'name email')
@@ -79,8 +99,20 @@ router.delete('/my-team/members/:userId', protect, authorize('team_leader'), asy
       return res.status(400).json({ message: 'You cannot remove yourself from the team' });
     }
 
+    // Get the removed user's email before removing them
+    const removedUser = await User.findById(req.params.userId).select('email').lean();
+
     team.members = team.members.filter(m => m.toString() !== req.params.userId);
     await team.save();
+
+    // Send removal email
+    if (removedUser) {
+      try {
+        await sendTeamRemovalEmail({ to: removedUser.email, teamName: team.name });
+      } catch (emailErr) {
+        console.error(`Failed to send team removal email to ${removedUser.email}:`, emailErr.message);
+      }
+    }
 
     const updated = await Team.findById(team._id)
       .populate('members', 'name email role')
