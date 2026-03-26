@@ -6,7 +6,7 @@ const Team = require('../models/Team');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const TrainingExample = require('../models/TrainingExample');
 const { buildTrainingExamplesFromLabeledReports } = require('../services/trainingService');
-const { sendTeamAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
+const { sendTeamAssignmentEmail, sendTeamLeadAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
 
 
 // GET /api/admin/stats
@@ -321,10 +321,9 @@ router.patch('/teams/:id/lead', protect, authorize('admin'), async (req, res) =>
     // Send email notifying the new team lead
     try {
       const leadUser = await User.findById(userId).select('email').lean();
-      await sendTeamAssignmentEmail({
+      await sendTeamLeadAssignmentEmail({
         to: leadUser.email,
         teamName: team.name,
-        role: 'team_leader',
         loginUrl: `${process.env.FRONTEND_URL}/login`,
       });
     } catch (emailErr) {

@@ -124,6 +124,7 @@ const AdminDashboard = () => {
   const [showAssignLead, setShowAssignLead] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState(null);
   const [confirmLead, setConfirmLead] = useState(null);
+  const [leadSuccessMessage, setLeadSuccessMessage] = useState('');
   const [confirmDeleteTeam, setConfirmDeleteTeam] = useState(false);
   const [showTeamAnalytics, setShowTeamAnalytics] = useState(false);
   const [teamStats, setTeamStats] = useState(null);
@@ -488,6 +489,8 @@ const AdminDashboard = () => {
     try {
       const res = await api.patch(`/admin/teams/${manageTeamId}/lead`, { userId: confirmLead._id });
       setTeams(prev => prev.map(t => t._id === manageTeamId ? res.data : t));
+      setLeadSuccessMessage(`${confirmLead.name} has been successfully assigned as team leader`);
+      setTimeout(() => setLeadSuccessMessage(''), 4000);
       setConfirmLead(null);
       setShowAssignLead(false);
     } catch (err) {
@@ -1038,6 +1041,11 @@ const AdminDashboard = () => {
         {/* ── TEAMS TAB ── */}
         {activeTab === 'teams' && (
           <div className="bg-white rounded-xl shadow-sm p-6">
+            {leadSuccessMessage && (
+              <div className="mb-4 px-4 py-3 bg-green-100 text-green-800 rounded-lg text-sm font-medium">
+                {leadSuccessMessage}
+              </div>
+            )}
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Teams</h2>
               <button
