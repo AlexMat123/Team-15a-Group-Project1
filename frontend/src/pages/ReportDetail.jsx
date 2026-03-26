@@ -13,6 +13,7 @@ import {
   Database,
   ChevronDown,
   ChevronRight,
+  Download,
 } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -26,6 +27,7 @@ const ReportDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedTypes, setExpandedTypes] = useState({});
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     fetchReport();
@@ -43,6 +45,28 @@ const ReportDetail = () => {
       setError(err.response?.data?.message || 'Failed to load report');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const response = await api.get(`/reports/${id}/download`, {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      const sanitised = report.filename.replace(/\.pdf$/i, '');
+      link.setAttribute('download', `QC_Report_${sanitised}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to download report');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -213,7 +237,21 @@ const ReportDetail = () => {
                 <p className="text-gray-500">Uploaded on {formatDate(report.createdAt)}</p>
               </div>
             </div>
-            {getStatusBadge(report.status)}
+            <div className="flex items-center gap-3">
+              {getStatusBadge(report.status)}
+              <button
+                onClick={handleDownload}
+                disabled={downloading}
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+              >
+                {downloading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4 mr-2" />
+                )}
+                Download Report
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, FileText, Trash2, Clock, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { Upload, FileText, Trash2, Clock, AlertCircle, CheckCircle, Loader2, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -121,6 +121,25 @@ const Dashboard = () => {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  };
+
+  const handleDownload = async (reportId, filename) => {
+    try {
+      const response = await api.get(`/reports/${reportId}/download`, {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      const sanitised = filename.replace(/\.pdf$/i, '');
+      link.setAttribute('download', `QC_Report_${sanitised}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to download report');
     }
   };
 
@@ -352,6 +371,13 @@ const Dashboard = () => {
                         >
                           View
                         </Link>
+                        <button
+                          onClick={() => handleDownload(report._id, report.filename)}
+                          className="text-gray-600 hover:text-gray-900 mr-4"
+                          title="Download Report"
+                        >
+                          <Download className="w-4 h-4 inline" />
+                        </button>
                         <button
                           onClick={() => handleDelete(report._id)}
                           className="text-red-600 hover:text-red-900"
