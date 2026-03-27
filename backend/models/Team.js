@@ -14,6 +14,11 @@ const teamSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    memberJoinDates: {
+      type: Map,
+      of: Date,
+      default: () => new Map(),
+    },
     teamLead: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

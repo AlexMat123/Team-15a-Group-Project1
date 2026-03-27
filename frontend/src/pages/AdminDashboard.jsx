@@ -1421,9 +1421,24 @@ const AdminDashboard = () => {
             {/* Team Analytics Overlay */}
             {showTeamAnalytics && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Team Analytics</h3>
-                  <p className="text-sm text-gray-500 mb-5">{teams.find(t => t._id === manageTeamId)?.name}</p>
+                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between items-start mb-5">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Team Analytics</h3>
+                      <p className="text-sm text-gray-500">
+                        {teams.find(t => t._id === manageTeamId)?.name}
+                        {teamStats?.teamLead && (
+                          <span className="ml-2 text-xs text-indigo-600 font-medium">Lead: {teamStats.teamLead.name}</span>
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => { setShowTeamAnalytics(false); setTeamStats(null); }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
 
                   {teamStatsLoading ? (
                     <p className="text-gray-400 text-sm text-center py-8 animate-pulse">Loading analytics...</p>
@@ -1477,6 +1492,28 @@ const AdminDashboard = () => {
                         </div>
                       </div>
 
+                      {/* Quality Assessment Breakdown */}
+                      {teamStats.qualityBreakdown && (
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-green-600">{teamStats.qualityBreakdown.passed}</p>
+                            <p className="text-xs text-gray-500 mt-1">Passed</p>
+                          </div>
+                          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-red-600">{teamStats.qualityBreakdown.failed}</p>
+                            <p className="text-xs text-gray-500 mt-1">Failed</p>
+                          </div>
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-amber-600">{teamStats.qualityBreakdown.uncertain}</p>
+                            <p className="text-xs text-gray-500 mt-1">Uncertain</p>
+                          </div>
+                          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-gray-600">{teamStats.qualityBreakdown.pending}</p>
+                            <p className="text-xs text-gray-500 mt-1">Pending</p>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Charts */}
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                         <div className="border border-gray-200 rounded-xl p-4">
@@ -1504,7 +1541,7 @@ const AdminDashboard = () => {
                       </div>
 
                       {/* Time savings */}
-                      <div className="border border-gray-200 rounded-xl p-4">
+                      <div className="border border-gray-200 rounded-xl p-4 mb-6">
                         <h4 className="text-sm font-semibold text-gray-900 mb-3">Time Savings Analysis</h4>
                         <div className="grid grid-cols-3 gap-3">
                           <div className="bg-purple-100 rounded-lg p-4 text-center">
@@ -1521,6 +1558,78 @@ const AdminDashboard = () => {
                           </div>
                         </div>
                       </div>
+
+                      {/* Member Breakdown */}
+                      {teamStats.memberBreakdown?.length > 0 && (
+                        <div className="border border-gray-200 rounded-xl p-4 mb-6">
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Member Breakdown</h4>
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-gray-500 bg-gray-50">
+                                <th className="pb-2 pt-2 px-3">Member</th>
+                                <th className="pb-2 pt-2 px-3 text-center">Reports</th>
+                                <th className="pb-2 pt-2 px-3 text-center">Errors</th>
+                                <th className="pb-2 pt-2 px-3 text-center">Passed</th>
+                                <th className="pb-2 pt-2 px-3 text-center">Failed</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {teamStats.memberBreakdown.map(m => (
+                                <tr key={m._id} className="border-t border-gray-100 hover:bg-gray-50">
+                                  <td className="py-2.5 px-3">
+                                    <p className="font-medium text-gray-900">{m.name}</p>
+                                    <p className="text-xs text-gray-400">{m.email}</p>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-center text-gray-700">{m.reportsCount}</td>
+                                  <td className="py-2.5 px-3 text-center text-red-600 font-medium">{m.errorsFound}</td>
+                                  <td className="py-2.5 px-3 text-center text-green-600 font-medium">{m.passed}</td>
+                                  <td className="py-2.5 px-3 text-center text-red-600 font-medium">{m.failed}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Recent Reports */}
+                      {teamStats.recentReports?.length > 0 && (
+                        <div className="border border-gray-200 rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Recent Reports</h4>
+                          <div className="space-y-2">
+                            {teamStats.recentReports.map(r => (
+                              <div key={r._id} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">{r.filename}</p>
+                                  <p className="text-xs text-gray-400">
+                                    by {r.analyzedBy} — {new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-3 ml-4">
+                                  <span className="text-xs text-red-500 font-medium">{r.errorCount} errors</span>
+                                  {r.result === 'good' && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-green-100 text-green-700">Passed</span>
+                                  )}
+                                  {r.result === 'bad' && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-700">Failed</span>
+                                  )}
+                                  {r.result === 'uncertain' && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-700">Uncertain</span>
+                                  )}
+                                  {!r.result && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-500">{r.status}</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {teamStats.totalReports === 0 && (
+                        <div className="bg-gray-50 rounded-xl p-8 text-center">
+                          <p className="text-gray-400 text-sm">No reports have been submitted by members of this team yet.</p>
+                        </div>
+                      )}
                     </>
                   ) : null}
 

@@ -53,7 +53,11 @@ router.patch('/my-team/members', protect, authorize('team_leader'), async (req, 
 
     const existingIds = team.members.map(id => id.toString());
     const newIds = memberIds.filter(id => !existingIds.includes(id));
-    team.members.push(...newIds);
+    const now = new Date();
+    newIds.forEach(id => {
+      team.members.push(id);
+      team.memberJoinDates.set(id, now);
+    });
     await team.save();
 
     // Send team assignment emails to newly added members
@@ -103,6 +107,7 @@ router.delete('/my-team/members/:userId', protect, authorize('team_leader'), asy
     const removedUser = await User.findById(req.params.userId).select('email').lean();
 
     team.members = team.members.filter(m => m.toString() !== req.params.userId);
+    team.memberJoinDates.delete(req.params.userId);
     await team.save();
 
     // Send removal email
@@ -134,7 +139,15 @@ router.get('/my-team/stats', protect, authorize('team_leader'), async (req, res)
     }
 
     const memberIds = team.members.map(m => m.toString());
-    const reports = await Report.find({ analyzedBy: { $in: memberIds } });
+    const allMemberReports = await Report.find({ analyzedBy: { $in: memberIds } });
+
+    // Only include reports created after each member joined this team
+    const reports = allMemberReports.filter(r => {
+      const rUserId = r.analyzedBy.toString();
+      const joinDate = team.memberJoinDates?.get(rUserId);
+      if (!joinDate) return true;
+      return new Date(r.createdAt) >= new Date(joinDate);
+    });
 
     const totalReports = reports.length;
     const totalErrors = reports.reduce((sum, r) => sum + (r.errorCount || 0), 0);
