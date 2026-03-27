@@ -124,6 +124,32 @@ Login link: ${loginUrl}
   });
 };
 
+const sendTeamLeadAssignmentEmail = async ({ to, teamName, loginUrl }) => {
+  const subject = `You have been assigned as Team Leader for "${teamName}"`;
+
+  const text = `
+You have been assigned as the Team Leader for the team "${teamName}" on the QC Checker platform.
+
+As a Team Leader, you can manage your team members, view team reports and monitor your team's performance.
+
+Login link: ${loginUrl}
+  `.trim();
+
+  const html = `
+    <p>You have been assigned as the <strong>Team Leader</strong> for the team <strong>"${teamName}"</strong> on the <strong>QC Checker</strong> platform.</p>
+    <p>As a Team Leader, you can manage your team members, view team reports and monitor your team's performance.</p>
+    <p><strong>Login link:</strong> <a href="${loginUrl}">${loginUrl}</a></p>
+  `;
+
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM,
+    to,
+    subject,
+    text,
+    html,
+  });
+};
+
 const sendTeamRemovalEmail = async ({ to, teamName }) => {
   const subject = `You have been removed from team "${teamName}"`;
 
@@ -151,5 +177,6 @@ module.exports = {
   sendNewUserWelcomeEmail,
   sendPasswordResetEmail,
   sendTeamAssignmentEmail,
+  sendTeamLeadAssignmentEmail,
   sendTeamRemovalEmail,
 };

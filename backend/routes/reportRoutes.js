@@ -8,6 +8,7 @@ const {
   deleteReport,
   getReportStats,
   getReportText,
+  downloadReport,
 } = require('../controllers/reportController');
 const { protect } = require('../middleware/authMiddleware');
 const { upload, handleUploadError } = require('../middleware/uploadMiddleware');
@@ -28,5 +29,6 @@ router
 
 router.post('/:id/analyze', analyzeReport);
 router.get('/:id/text', getReportText);
+router.get('/:id/download', downloadReport);
 
 module.exports = router;

@@ -1,7 +1,10 @@
 const Report = require('../models/Report');
+const User = require('../models/User');
+const Team = require('../models/Team');
 const { processDocument } = require('../services/pdfService');
 const { analyzeDocument } = require('../services/errorDetection');
 const { predictQualityFromTraining } = require('../services/trainingService');
+const { generateReportPdf } = require('../services/reportPdfService');
 const fs = require('fs');
 const path = require('path');
 
@@ -274,6 +277,46 @@ const getReportText = async (req, res) => {
   }
 };
 
+const downloadReport = async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id)
+      .populate('analyzedBy', 'name email');
+
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    const analyzedById = typeof report.analyzedBy === 'object'
+      ? report.analyzedBy._id.toString()
+      : report.analyzedBy.toString();
+
+    if (
+      req.user.role === 'user' &&
+      analyzedById !== req.user._id.toString()
+    ) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    // Find the user's team (if any)
+    const team = await Team.findOne({ members: analyzedById })
+      .populate('teamLead', 'name email')
+      .lean();
+
+    const user = report.analyzedBy;
+    const sanitisedFilename = report.filename.replace(/\.pdf$/i, '');
+    const downloadName = `QC_Report_${sanitisedFilename}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+
+    const doc = generateReportPdf(report, user, team);
+    doc.pipe(res);
+    doc.end();
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   uploadReport,
   analyzeReport,
@@ -282,4 +325,5 @@ module.exports = {
   deleteReport,
   getReportStats,
   getReportText,
+  downloadReport,
 };
