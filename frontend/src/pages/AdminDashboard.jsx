@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Clock,
   FileText,
+  Filter,
   KeyRound,
   Search,
   Trash2,
@@ -96,6 +97,12 @@ const AdminDashboard = () => {
   const [passwordResetRequests, setPasswordResetRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [reportsError, setReportsError] = useState('');
+  // Overview filters
+  const [filterRange, setFilterRange] = useState('all');
+  const [filterTeam, setFilterTeam] = useState('');
+  const [filterUser, setFilterUser] = useState('');
+  const [filterResult, setFilterResult] = useState('');
+
   const [dashboardStats, setDashboardStats] = useState({
     totalReports: 0,
     totalErrors: 0,
@@ -203,12 +210,20 @@ const AdminDashboard = () => {
     };
   };
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (range = filterRange, team = filterTeam, userId = filterUser, result = filterResult) => {
     setLoadingReports(true);
+
+    // Build query string from active filters
+    const params = new URLSearchParams();
+    if (range && range !== 'all') params.append('range', range);
+    if (team) params.append('team', team);
+    if (userId) params.append('user', userId);
+    if (result) params.append('result', result);
+    const qs = params.toString() ? `?${params.toString()}` : '';
 
     try {
       const [statsResponse, reportsResponse] = await Promise.all([
-        api.get('/admin/stats'),
+        api.get(`/admin/stats${qs}`),
         api.get('/admin/reports'),
       ]);
 
@@ -228,6 +243,7 @@ const AdminDashboard = () => {
         aiTime: statsResponse.data?.aiTime || 0,
         timeSavedPercent: statsResponse.data?.timeSavedPercent || 0,
         errorBreakdown: statsResponse.data?.errorBreakdown || [],
+        qualityBreakdown: statsResponse.data?.qualityBreakdown || null,
       });
       setReports(reportsResponse.data || []);
       setReportsError('');
@@ -251,10 +267,14 @@ const AdminDashboard = () => {
     }
   };
 
+  // Re-fetch stats when any filter changes
+  useEffect(() => {
+    fetchDashboardData(filterRange, filterTeam, filterUser, filterResult);
+  }, [filterRange, filterTeam, filterUser, filterResult]);
+
   useEffect(() => {
     fetchUsers();
     fetchPasswordResetRequest();
-    fetchDashboardData();
     fetchTeams();
   }, []);
 
@@ -578,6 +598,109 @@ const AdminDashboard = () => {
               </p>
             </div>
 
+            {/* Filters */}
+            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Filter className="w-4 h-4 text-indigo-600" />
+                <h3 className="text-sm font-semibold text-gray-700">Filter Analytics</h3>
+                {(filterRange !== 'all' || filterTeam || filterUser || filterResult) && (
+                  <button
+                    onClick={() => { setFilterRange('all'); setFilterTeam(''); setFilterUser(''); setFilterResult(''); }}
+                    className="ml-auto text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Date Range</label>
+                  <select
+                    value={filterRange}
+                    onChange={(e) => setFilterRange(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="7">Last 7 Days</option>
+                    <option value="30">Last 30 Days</option>
+                    <option value="90">Last 90 Days</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Team</label>
+                  <select
+                    value={filterTeam}
+                    onChange={(e) => { setFilterTeam(e.target.value); setFilterUser(''); }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="">All Teams</option>
+                    {teams.map(t => (
+                      <option key={t._id} value={t._id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">User</label>
+                  <select
+                    value={filterUser}
+                    onChange={(e) => setFilterUser(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="">All Users</option>
+                    {(filterTeam
+                      ? users.filter(u => {
+                          const selectedTeam = teams.find(t => t._id === filterTeam);
+                          return selectedTeam?.members?.some(m => (typeof m === 'object' ? m._id : m) === u._id);
+                        })
+                      : users
+                    ).map(u => (
+                      <option key={u._id} value={u._id}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Result</label>
+                  <select
+                    value={filterResult}
+                    onChange={(e) => setFilterResult(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="">All Results</option>
+                    <option value="good">Passed</option>
+                    <option value="bad">Failed</option>
+                    <option value="uncertain">Uncertain</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Active filter summary */}
+            {(filterRange !== 'all' || filterTeam || filterUser || filterResult) && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2.5 mb-4 flex items-center gap-2 flex-wrap text-sm">
+                <span className="text-indigo-700 font-medium">Showing:</span>
+                {filterRange !== 'all' && (
+                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                    Last {filterRange} days
+                  </span>
+                )}
+                {filterTeam && (
+                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                    Team: {teams.find(t => t._id === filterTeam)?.name || 'Unknown'}
+                  </span>
+                )}
+                {filterUser && (
+                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                    User: {users.find(u => u._id === filterUser)?.name || 'Unknown'}
+                  </span>
+                )}
+                {filterResult && (
+                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                    Result: {filterResult === 'good' ? 'Passed' : filterResult === 'bad' ? 'Failed' : 'Uncertain'}
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               {stats.map((stat) => (
                 <div key={stat.label} className="bg-white rounded-xl shadow-sm p-6">
@@ -593,6 +716,24 @@ const AdminDashboard = () => {
                 </div>
               ))}
             </div>
+
+            {/* Quality breakdown */}
+            {dashboardStats.qualityBreakdown && (
+              <div className="grid grid-cols-3 gap-4 mb-8">
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
+                  <p className="text-2xl font-bold text-green-600">{dashboardStats.qualityBreakdown.passed}</p>
+                  <p className="text-sm text-gray-500">Passed</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-red-500">
+                  <p className="text-2xl font-bold text-red-600">{dashboardStats.qualityBreakdown.failed}</p>
+                  <p className="text-sm text-gray-500">Failed</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-amber-500">
+                  <p className="text-2xl font-bold text-amber-600">{dashboardStats.qualityBreakdown.uncertain}</p>
+                  <p className="text-sm text-gray-500">Uncertain</p>
+                </div>
+              </div>
+            )}
 
             {loadingReports ? (
               <div className="bg-white rounded-xl shadow-sm p-6 mb-8 text-sm text-gray-500">

@@ -9,15 +9,46 @@ const { buildTrainingExamplesFromLabeledReports } = require('../services/trainin
 const { sendTeamAssignmentEmail, sendTeamLeadAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
 
 
-// GET /api/admin/stats
+// GET /api/admin/stats?range=7d|30d|90d|all&team=teamId&user=userId&result=good|bad|uncertain
 router.get('/stats', protect, authorize('admin'), async (req, res) => {
 
   try {
+    const { range, team, user: userId, result } = req.query;
     const totalUsers = await User.countDocuments({ role: { $ne: 'admin' } });
-    const totalReports = await Report.countDocuments();
 
-    const reports = await Report.find();
+    // Build report query filter
+    const filter = {};
 
+    // Date range filter
+    if (range && range !== 'all') {
+      const days = parseInt(range);
+      if (!isNaN(days) && days > 0) {
+        filter.createdAt = { $gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) };
+      }
+    }
+
+    // Team filter — only include reports from members of the selected team
+    if (team) {
+      const teamDoc = await Team.findById(team);
+      if (teamDoc) {
+        const memberIds = teamDoc.members.map(m => m.toString());
+        filter.analyzedBy = { $in: memberIds };
+      }
+    }
+
+    // User filter
+    if (userId) {
+      filter.analyzedBy = userId;
+    }
+
+    // Result filter
+    if (result) {
+      filter['qualityAssessment.label'] = result;
+    }
+
+    const reports = await Report.find(filter);
+
+    const totalReports = reports.length;
     const totalErrors = reports.reduce((sum, r) => sum + (r.errorCount || 0), 0);
     const totalTimeSaved = reports.reduce((sum, r) => sum + (r.timeSaved || 0), 0);
 
@@ -29,8 +60,13 @@ router.get('/stats', protect, authorize('admin'), async (req, res) => {
       { name: 'Missing Data', value: reports.reduce((sum, r) => sum + (r.errorSummary?.missing_data || 0), 0) },
     ];
 
-    const manualTime = parseFloat((totalTimeSaved / 0.16).toFixed(1)); // ~84% time saved ratio
+    const manualTime = parseFloat((totalTimeSaved / 0.16).toFixed(1));
     const timeSavedPercent = manualTime > 0 ? Math.round((totalTimeSaved / manualTime) * 100) : 0;
+
+    // Quality assessment counts
+    const passed = reports.filter(r => r.qualityAssessment?.label === 'good').length;
+    const failed = reports.filter(r => r.qualityAssessment?.label === 'bad').length;
+    const uncertain = reports.filter(r => r.qualityAssessment?.label === 'uncertain').length;
 
     res.json({
       totalUsers,
@@ -41,6 +77,7 @@ router.get('/stats', protect, authorize('admin'), async (req, res) => {
       aiTime: Math.round(manualTime - totalTimeSaved),
       timeSavedPercent,
       errorBreakdown,
+      qualityBreakdown: { passed, failed, uncertain },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
