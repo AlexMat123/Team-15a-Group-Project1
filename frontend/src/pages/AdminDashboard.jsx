@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
+  ChevronDown,
+  ChevronRight,
   Clock,
   FileText,
   KeyRound,
@@ -77,6 +79,7 @@ const AdminDashboard = () => {
   const [role, setRole] = useState('user');
   const [searchTerm, setSearchTerm] = useState('');
   const [reportSearch, setReportSearch] = useState('');
+  const [expandedReports, setExpandedReports] = useState({});
   const [openTrainingMenu, setOpenTrainingMenu] = useState(null);
   const [users, setUsers] = useState([]);
   const [reports, setReports] = useState([]);
@@ -934,15 +937,30 @@ const AdminDashboard = () => {
           <section>
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Analysed Reports</h2>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
-                <input
-                  type="text"
-                  placeholder="Search reports..."
-                  value={reportSearch}
-                  onChange={(e) => setReportSearch(e.target.value)}
-                  className="border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm"
-                />
+              <div className="flex items-center gap-3">
+                {filteredReports.some(r => r.errors?.length > 0) && (
+                  <button
+                    onClick={() => {
+                      const allExpanded = filteredReports.every(r => expandedReports[r._id]);
+                      const next = {};
+                      filteredReports.forEach(r => { next[r._id] = !allExpanded; });
+                      setExpandedReports(next);
+                    }}
+                    className="text-sm text-indigo-600 border border-indigo-200 rounded-lg px-3 py-2 hover:bg-indigo-50"
+                  >
+                    {filteredReports.every(r => expandedReports[r._id]) ? 'Collapse All' : 'Expand All'}
+                  </button>
+                )}
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                  <input
+                    type="text"
+                    placeholder="Search reports..."
+                    value={reportSearch}
+                    onChange={(e) => setReportSearch(e.target.value)}
+                    className="border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm"
+                  />
+                </div>
               </div>
             </div>
 
@@ -974,17 +992,28 @@ const AdminDashboard = () => {
 
                         {report.errors?.length > 0 && (
                           <div className="border-t border-gray-100 pt-3">
-                            <p className="text-xs font-semibold text-gray-600 mb-2">Errors Detected:</p>
-                            <div className="space-y-1">
-                              {report.errors.map((error, index) => (
-                                <div key={error._id || index} className="flex items-center gap-3">
-                                  <span className="text-xs px-2 py-0.5 rounded font-medium min-w-[80px] text-center bg-gray-100 text-gray-700">
-                                    {error.type}
-                                  </span>
-                                  <span className="text-sm text-gray-600">{error.message}</span>
-                                </div>
-                              ))}
-                            </div>
+                            <button
+                              onClick={() => setExpandedReports(prev => ({ ...prev, [report._id]: !prev[report._id] }))}
+                              className="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-indigo-600 transition-colors mb-2"
+                            >
+                              {expandedReports[report._id]
+                                ? <ChevronDown className="w-4 h-4" />
+                                : <ChevronRight className="w-4 h-4" />
+                              }
+                              Errors Detected ({report.errors.length})
+                            </button>
+                            {expandedReports[report._id] && (
+                              <div className="space-y-1 ml-5">
+                                {report.errors.map((error, index) => (
+                                  <div key={error._id || index} className="flex items-center gap-3">
+                                    <span className="text-xs px-2 py-0.5 rounded font-medium min-w-[80px] text-center bg-gray-100 text-gray-700">
+                                      {error.type}
+                                    </span>
+                                    <span className="text-sm text-gray-600">{error.message}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
