@@ -7,6 +7,7 @@ const {
   getReportById,
   deleteReport,
   getReportStats,
+  getProfileAnalytics,
   getReportText,
   downloadReport,
 } = require('../controllers/reportController');
@@ -16,6 +17,7 @@ const { upload, handleUploadError } = require('../middleware/uploadMiddleware');
 router.use(protect);
 
 router.get('/stats', getReportStats);
+router.get('/profile-analytics', getProfileAnalytics);
 
 router
   .route('/')

@@ -253,6 +253,129 @@ const getReportStats = async (req, res) => {
   }
 };
 
+const getProfileAnalytics = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const reports = await Report.find({ analyzedBy: userId })
+      .select(
+        'filename status errorCount errorSummary timeSaved qualityAssessment createdAt'
+      )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const summary = {
+      totalReports: reports.length,
+      analyzedReports: 0,
+      pendingReports: 0,
+      failedReports: 0,
+      totalErrors: 0,
+      averageErrorsPerReport: 0,
+      totalTimeSaved: 0,
+    };
+
+    const errorBreakdown = {
+      placeholder: 0,
+      consistency: 0,
+      compliance: 0,
+      formatting: 0,
+      missing_data: 0,
+    };
+
+    const qualityBreakdown = {
+      good: 0,
+      bad: 0,
+      uncertain: 0,
+    };
+
+    const monthFormatter = new Intl.DateTimeFormat('en-GB', {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+    const now = new Date();
+    const trendStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
+    const trendBuckets = new Map();
+
+    for (let offset = 0; offset < 6; offset += 1) {
+      const bucketDate = new Date(
+        Date.UTC(trendStart.getUTCFullYear(), trendStart.getUTCMonth() + offset, 1)
+      );
+      const key = `${bucketDate.getUTCFullYear()}-${String(
+        bucketDate.getUTCMonth() + 1
+      ).padStart(2, '0')}`;
+
+      trendBuckets.set(key, {
+        periodLabel: monthFormatter.format(bucketDate),
+        reportCount: 0,
+        errorCount: 0,
+      });
+    }
+
+    reports.forEach((report) => {
+      summary.totalErrors += report.errorCount || 0;
+      summary.totalTimeSaved += report.timeSaved || 0;
+
+      if (report.status === 'analyzed') {
+        summary.analyzedReports += 1;
+      } else if (report.status === 'failed') {
+        summary.failedReports += 1;
+      } else if (['pending', 'processing'].includes(report.status)) {
+        summary.pendingReports += 1;
+      }
+
+      errorBreakdown.placeholder += report.errorSummary?.placeholder || 0;
+      errorBreakdown.consistency += report.errorSummary?.consistency || 0;
+      errorBreakdown.compliance += report.errorSummary?.compliance || 0;
+      errorBreakdown.formatting += report.errorSummary?.formatting || 0;
+      errorBreakdown.missing_data += report.errorSummary?.missing_data || 0;
+
+      const qualityLabel = report.qualityAssessment?.label;
+      if (qualityLabel && qualityBreakdown[qualityLabel] !== undefined) {
+        qualityBreakdown[qualityLabel] += 1;
+      }
+
+      const createdAt = report.createdAt ? new Date(report.createdAt) : null;
+      if (createdAt && createdAt >= trendStart) {
+        const key = `${createdAt.getUTCFullYear()}-${String(
+          createdAt.getUTCMonth() + 1
+        ).padStart(2, '0')}`;
+        const existingBucket = trendBuckets.get(key);
+
+        if (existingBucket) {
+          existingBucket.reportCount += 1;
+          existingBucket.errorCount += report.errorCount || 0;
+        }
+      }
+    });
+
+    if (summary.analyzedReports > 0) {
+      summary.averageErrorsPerReport = Number(
+        (summary.totalErrors / summary.analyzedReports).toFixed(2)
+      );
+    }
+
+    const recentReports = reports.slice(0, 5).map((report) => ({
+      _id: report._id,
+      filename: report.filename,
+      createdAt: report.createdAt,
+      status: report.status,
+      errorCount: report.errorCount || 0,
+      timeSaved: report.timeSaved || 0,
+      qualityLabel: report.qualityAssessment?.label || null,
+    }));
+
+    res.json({
+      summary,
+      errorBreakdown,
+      qualityBreakdown,
+      trends: Array.from(trendBuckets.values()),
+      recentReports,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const getReportText = async (req, res) => {
   try {
     const report = await Report.findById(req.params.id).select('extractedText filename analyzedBy');
@@ -324,6 +447,7 @@ module.exports = {
   getReportById,
   deleteReport,
   getReportStats,
+  getProfileAnalytics,
   getReportText,
   downloadReport,
 };
