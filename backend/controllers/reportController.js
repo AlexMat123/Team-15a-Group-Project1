@@ -8,6 +8,74 @@ const { generateReportPdf } = require('../services/reportPdfService');
 const fs = require('fs');
 const path = require('path');
 
+const getProfileAnalyticsScopeConfig = (scope) => {
+  const now = new Date();
+  const safeScope = ['week', 'month', 'all'].includes(scope) ? scope : 'all';
+
+  if (safeScope === 'week') {
+    const startDate = new Date(now);
+    startDate.setUTCDate(now.getUTCDate() - 6);
+    startDate.setUTCHours(0, 0, 0, 0);
+
+    return {
+      scope: safeScope,
+      startDate,
+      bucketCount: 7,
+      getBucketDate: (offset) => {
+        const bucketDate = new Date(startDate);
+        bucketDate.setUTCDate(startDate.getUTCDate() + offset);
+        return bucketDate;
+      },
+      getBucketKey: (date) => date.toISOString().slice(0, 10),
+      formatBucketLabel: (date) =>
+        new Intl.DateTimeFormat('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          timeZone: 'UTC',
+        }).format(date),
+    };
+  }
+
+  if (safeScope === 'month') {
+    const startDate = new Date(now);
+    startDate.setUTCDate(now.getUTCDate() - 29);
+    startDate.setUTCHours(0, 0, 0, 0);
+
+    return {
+      scope: safeScope,
+      startDate,
+      bucketCount: 30,
+      getBucketDate: (offset) => {
+        const bucketDate = new Date(startDate);
+        bucketDate.setUTCDate(startDate.getUTCDate() + offset);
+        return bucketDate;
+      },
+      getBucketKey: (date) => date.toISOString().slice(0, 10),
+      formatBucketLabel: (date) =>
+        new Intl.DateTimeFormat('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          timeZone: 'UTC',
+        }).format(date),
+    };
+  }
+
+  return {
+    scope: safeScope,
+    startDate: null,
+    bucketCount: 0,
+    getBucketDate: () => null,
+    getBucketKey: (date) =>
+      `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,
+    formatBucketLabel: (date) =>
+      new Intl.DateTimeFormat('en-GB', {
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }).format(date),
+  };
+};
+
 const uploadReport = async (req, res) => {
   try {
     if (!req.file) {
@@ -253,6 +321,234 @@ const getReportStats = async (req, res) => {
   }
 };
 
+const getProfileAnalytics = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const scopeConfig = getProfileAnalyticsScopeConfig(req.query.scope);
+    const reportQuery = { analyzedBy: userId };
+
+    if (scopeConfig.startDate) {
+      reportQuery.createdAt = { $gte: scopeConfig.startDate };
+    }
+
+    const reports = await Report.find(reportQuery)
+      .select(
+        'filename status errorCount errorSummary timeSaved qualityAssessment createdAt errors'
+      )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const summary = {
+      totalReports: reports.length,
+      analyzedReports: 0,
+      pendingReports: 0,
+      failedReports: 0,
+      totalErrors: 0,
+      averageErrorsPerReport: 0,
+      totalTimeSaved: 0,
+    };
+
+    const errorBreakdown = {
+      placeholder: 0,
+      consistency: 0,
+      compliance: 0,
+      formatting: 0,
+      missing_data: 0,
+    };
+
+    const qualityBreakdown = {
+      good: 0,
+      bad: 0,
+      uncertain: 0,
+    };
+    const errorTypesByReport = {
+      placeholder: 0,
+      consistency: 0,
+      compliance: 0,
+      formatting: 0,
+      missing_data: 0,
+    };
+    const checklistFailureCounts = new Map();
+
+    const trendBuckets = new Map();
+    const bucketDates = [];
+
+    if (scopeConfig.scope === 'all') {
+      const now = new Date();
+      const oldestReportDate = reports.length
+        ? new Date(reports[reports.length - 1].createdAt)
+        : now;
+      const firstBucketDate = new Date(
+        Date.UTC(oldestReportDate.getUTCFullYear(), oldestReportDate.getUTCMonth(), 1)
+      );
+      const lastBucketDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+      for (
+        let bucketDate = new Date(firstBucketDate);
+        bucketDate <= lastBucketDate;
+        bucketDate = new Date(Date.UTC(bucketDate.getUTCFullYear(), bucketDate.getUTCMonth() + 1, 1))
+      ) {
+        bucketDates.push(bucketDate);
+      }
+    } else {
+      for (let offset = 0; offset < scopeConfig.bucketCount; offset += 1) {
+        bucketDates.push(scopeConfig.getBucketDate(offset));
+      }
+    }
+
+    bucketDates.forEach((bucketDate) => {
+      const key = scopeConfig.getBucketKey(bucketDate);
+
+      trendBuckets.set(key, {
+        periodLabel: scopeConfig.formatBucketLabel(bucketDate),
+        reportCount: 0,
+        errorCount: 0,
+        analyzedCount: 0,
+        passedCount: 0,
+        failedCount: 0,
+      });
+    });
+
+    reports.forEach((report) => {
+      summary.totalErrors += report.errorCount || 0;
+      summary.totalTimeSaved += report.timeSaved || 0;
+
+      if (report.status === 'analyzed') {
+        summary.analyzedReports += 1;
+      } else if (report.status === 'failed') {
+        summary.failedReports += 1;
+      } else if (['pending', 'processing'].includes(report.status)) {
+        summary.pendingReports += 1;
+      }
+
+      errorBreakdown.placeholder += report.errorSummary?.placeholder || 0;
+      errorBreakdown.consistency += report.errorSummary?.consistency || 0;
+      errorBreakdown.compliance += report.errorSummary?.compliance || 0;
+      errorBreakdown.formatting += report.errorSummary?.formatting || 0;
+      errorBreakdown.missing_data += report.errorSummary?.missing_data || 0;
+
+      if ((report.errorSummary?.placeholder || 0) > 0) errorTypesByReport.placeholder += 1;
+      if ((report.errorSummary?.consistency || 0) > 0) errorTypesByReport.consistency += 1;
+      if ((report.errorSummary?.compliance || 0) > 0) errorTypesByReport.compliance += 1;
+      if ((report.errorSummary?.formatting || 0) > 0) errorTypesByReport.formatting += 1;
+      if ((report.errorSummary?.missing_data || 0) > 0) errorTypesByReport.missing_data += 1;
+
+      const qualityLabel = report.qualityAssessment?.label;
+      if (qualityLabel && qualityBreakdown[qualityLabel] !== undefined) {
+        qualityBreakdown[qualityLabel] += 1;
+      }
+
+      (report.errors || []).forEach((error) => {
+        if (!error?.message) {
+          return;
+        }
+
+        const currentCount = checklistFailureCounts.get(error.message) || 0;
+        checklistFailureCounts.set(error.message, currentCount + 1);
+      });
+
+      const createdAt = report.createdAt ? new Date(report.createdAt) : null;
+      if (createdAt) {
+        const key = scopeConfig.getBucketKey(createdAt);
+        const existingBucket = trendBuckets.get(key);
+
+        if (existingBucket) {
+          existingBucket.reportCount += 1;
+          existingBucket.errorCount += report.errorCount || 0;
+          if (report.status === 'analyzed') {
+            existingBucket.analyzedCount += 1;
+            if (report.qualityAssessment?.label === 'good') {
+              existingBucket.passedCount += 1;
+            } else if (report.qualityAssessment?.label === 'bad') {
+              existingBucket.failedCount += 1;
+            }
+          }
+        }
+      }
+    });
+
+    if (summary.analyzedReports > 0) {
+      summary.averageErrorsPerReport = Number(
+        (summary.totalErrors / summary.analyzedReports).toFixed(2)
+      );
+    }
+
+    const mostCommonErrorTypes = Object.entries(errorBreakdown)
+      .map(([type, count]) => ({
+        type,
+        count,
+        reportsAffected: errorTypesByReport[type] || 0,
+      }))
+      .sort((a, b) => {
+        if (b.count !== a.count) {
+          return b.count - a.count;
+        }
+
+        return b.reportsAffected - a.reportsAffected;
+      });
+
+    const checklistFailureBreakdown = Array.from(checklistFailureCounts.entries())
+      .map(([message, count]) => ({ message, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    const passFailRateTrends = Array.from(trendBuckets.values()).map((bucket) => ({
+      periodLabel: bucket.periodLabel,
+      analyzedCount: bucket.analyzedCount,
+      passedCount: bucket.passedCount,
+      failedCount: bucket.failedCount,
+      passRate:
+        bucket.analyzedCount > 0
+          ? Number(((bucket.passedCount / bucket.analyzedCount) * 100).toFixed(1))
+          : 0,
+    }));
+
+    const qualityScoreTrend = reports
+      .filter((report) => report.status === 'analyzed')
+      .map((report) => ({
+        _id: report._id,
+        filename: report.filename,
+        createdAt: report.createdAt,
+        qualityLabel: report.qualityAssessment?.label || null,
+        qualityScore: Number(((report.qualityAssessment?.goodScore || 0) * 100).toFixed(1)),
+      }))
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+      .slice(-10);
+
+    const recentReports = reports.slice(0, 5).map((report) => ({
+      _id: report._id,
+      filename: report.filename,
+      createdAt: report.createdAt,
+      status: report.status,
+      errorCount: report.errorCount || 0,
+      timeSaved: report.timeSaved || 0,
+      qualityLabel: report.qualityAssessment?.label || null,
+      errorSummary: {
+        placeholder: report.errorSummary?.placeholder || 0,
+        consistency: report.errorSummary?.consistency || 0,
+        compliance: report.errorSummary?.compliance || 0,
+        formatting: report.errorSummary?.formatting || 0,
+        missing_data: report.errorSummary?.missing_data || 0,
+      },
+    }));
+
+    res.json({
+      scope: scopeConfig.scope,
+      summary,
+      errorBreakdown,
+      qualityBreakdown,
+      trends: Array.from(trendBuckets.values()),
+      passFailRateTrends,
+      mostCommonErrorTypes,
+      checklistFailureBreakdown,
+      qualityScoreTrend,
+      recentReports,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const getReportText = async (req, res) => {
   try {
     const report = await Report.findById(req.params.id).select('extractedText filename analyzedBy');
@@ -324,6 +620,7 @@ module.exports = {
   getReportById,
   deleteReport,
   getReportStats,
+  getProfileAnalytics,
   getReportText,
   downloadReport,
 };
