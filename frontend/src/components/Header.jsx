@@ -9,7 +9,7 @@ const Header = () => {
     <header className="bg-white shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <Link to="/" className="flex items-center space-x-2">
+          <Link to="/dashboard" className="flex items-center space-x-2">
             <FileCheck className="w-8 h-8 text-indigo-600" />
             <span className="text-xl font-bold text-gray-900">QC Checker</span>
           </Link>
@@ -28,7 +28,7 @@ const Header = () => {
                     My Team
                   </Link>
                 )}
-                {(user?.role === 'admin' || user?.role === 'team_leader') && (
+                {user?.role === 'admin' && (
                   <Link
                     to="/admin"
                     className="text-sm text-indigo-600 hover:text-indigo-700"

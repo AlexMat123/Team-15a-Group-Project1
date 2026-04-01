@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
+  ChevronDown,
+  ChevronRight,
   Clock,
   FileText,
+  Filter,
   KeyRound,
   Search,
   Trash2,
@@ -77,6 +80,7 @@ const AdminDashboard = () => {
   const [role, setRole] = useState('user');
   const [searchTerm, setSearchTerm] = useState('');
   const [reportSearch, setReportSearch] = useState('');
+  const [expandedReports, setExpandedReports] = useState({});
   const [openTrainingMenu, setOpenTrainingMenu] = useState(null);
   const [users, setUsers] = useState([]);
   const [reports, setReports] = useState([]);
@@ -93,6 +97,12 @@ const AdminDashboard = () => {
   const [passwordResetRequests, setPasswordResetRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [reportsError, setReportsError] = useState('');
+  // Overview filters
+  const [filterRange, setFilterRange] = useState('all');
+  const [filterTeam, setFilterTeam] = useState('');
+  const [filterUser, setFilterUser] = useState('');
+  const [filterResult, setFilterResult] = useState('');
+
   const [dashboardStats, setDashboardStats] = useState({
     totalReports: 0,
     totalErrors: 0,
@@ -129,6 +139,9 @@ const AdminDashboard = () => {
   const [showTeamAnalytics, setShowTeamAnalytics] = useState(false);
   const [teamStats, setTeamStats] = useState(null);
   const [teamStatsLoading, setTeamStatsLoading] = useState(false);
+  const [teamFilterRange, setTeamFilterRange] = useState('all');
+  const [teamFilterUser, setTeamFilterUser] = useState('');
+  const [teamFilterResult, setTeamFilterResult] = useState('');
 
   // --- Training state ---
   const [trainingExamples, setTrainingExamples] = useState([]);
@@ -220,12 +233,20 @@ const AdminDashboard = () => {
     };
   };
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (range = filterRange, team = filterTeam, userId = filterUser, result = filterResult) => {
     setLoadingReports(true);
+
+    // Build query string from active filters
+    const params = new URLSearchParams();
+    if (range && range !== 'all') params.append('range', range);
+    if (team) params.append('team', team);
+    if (userId) params.append('user', userId);
+    if (result) params.append('result', result);
+    const qs = params.toString() ? `?${params.toString()}` : '';
 
     try {
       const [statsResponse, reportsResponse] = await Promise.all([
-        api.get('/admin/stats'),
+        api.get(`/admin/stats${qs}`),
         api.get('/admin/reports'),
       ]);
 
@@ -245,6 +266,7 @@ const AdminDashboard = () => {
         aiTime: statsResponse.data?.aiTime || 0,
         timeSavedPercent: statsResponse.data?.timeSavedPercent || 0,
         errorBreakdown: statsResponse.data?.errorBreakdown || [],
+        qualityBreakdown: statsResponse.data?.qualityBreakdown || null,
       });
       setReports(reportsResponse.data || []);
       setReportsError('');
@@ -267,6 +289,11 @@ const AdminDashboard = () => {
       setLoadingReports(false);
     }
   };
+
+  // Re-fetch stats when any filter changes
+  useEffect(() => {
+    fetchDashboardData(filterRange, filterTeam, filterUser, filterResult);
+  }, [filterRange, filterTeam, filterUser, filterResult]);
 
   const fetchTrainingData = async () => {
     setLoadingTraining(true);
@@ -384,7 +411,6 @@ const AdminDashboard = () => {
   useEffect(() => {
     fetchUsers();
     fetchPasswordResetRequest();
-    fetchDashboardData();
     fetchTeams();
     fetchTrainingData();
   }, []);
@@ -632,11 +658,15 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleOpenTeamAnalytics = async () => {
+  const fetchTeamStats = async (range = teamFilterRange, userId = teamFilterUser, result = teamFilterResult) => {
     setTeamStatsLoading(true);
-    setShowTeamAnalytics(true);
     try {
-      const res = await api.get(`/admin/teams/${manageTeamId}/stats`);
+      const params = new URLSearchParams();
+      if (range && range !== 'all') params.append('range', range);
+      if (userId) params.append('user', userId);
+      if (result) params.append('result', result);
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const res = await api.get(`/admin/teams/${manageTeamId}/stats${qs}`);
       setTeamStats(res.data);
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to load team analytics');
@@ -644,6 +674,14 @@ const AdminDashboard = () => {
     } finally {
       setTeamStatsLoading(false);
     }
+  };
+
+  const handleOpenTeamAnalytics = async () => {
+    setTeamFilterRange('all');
+    setTeamFilterUser('');
+    setTeamFilterResult('');
+    setShowTeamAnalytics(true);
+    fetchTeamStats('all', '', '');
   };
 
   const handleDeleteTeam = async () => {
@@ -709,6 +747,109 @@ const AdminDashboard = () => {
               </p>
             </div>
 
+            {/* Filters */}
+            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Filter className="w-4 h-4 text-indigo-600" />
+                <h3 className="text-sm font-semibold text-gray-700">Filter Analytics</h3>
+                {(filterRange !== 'all' || filterTeam || filterUser || filterResult) && (
+                  <button
+                    onClick={() => { setFilterRange('all'); setFilterTeam(''); setFilterUser(''); setFilterResult(''); }}
+                    className="ml-auto text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Date Range</label>
+                  <select
+                    value={filterRange}
+                    onChange={(e) => setFilterRange(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="7">Last 7 Days</option>
+                    <option value="30">Last 30 Days</option>
+                    <option value="90">Last 90 Days</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Team</label>
+                  <select
+                    value={filterTeam}
+                    onChange={(e) => { setFilterTeam(e.target.value); setFilterUser(''); }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="">All Teams</option>
+                    {teams.map(t => (
+                      <option key={t._id} value={t._id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">User</label>
+                  <select
+                    value={filterUser}
+                    onChange={(e) => setFilterUser(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="">All Users</option>
+                    {(filterTeam
+                      ? users.filter(u => {
+                          const selectedTeam = teams.find(t => t._id === filterTeam);
+                          return selectedTeam?.members?.some(m => (typeof m === 'object' ? m._id : m) === u._id);
+                        })
+                      : users
+                    ).map(u => (
+                      <option key={u._id} value={u._id}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Result</label>
+                  <select
+                    value={filterResult}
+                    onChange={(e) => setFilterResult(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="">All Results</option>
+                    <option value="good">Passed</option>
+                    <option value="bad">Failed</option>
+                    <option value="uncertain">Uncertain</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Active filter summary */}
+            {(filterRange !== 'all' || filterTeam || filterUser || filterResult) && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2.5 mb-4 flex items-center gap-2 flex-wrap text-sm">
+                <span className="text-indigo-700 font-medium">Showing:</span>
+                {filterRange !== 'all' && (
+                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                    Last {filterRange} days
+                  </span>
+                )}
+                {filterTeam && (
+                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                    Team: {teams.find(t => t._id === filterTeam)?.name || 'Unknown'}
+                  </span>
+                )}
+                {filterUser && (
+                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                    User: {users.find(u => u._id === filterUser)?.name || 'Unknown'}
+                  </span>
+                )}
+                {filterResult && (
+                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                    Result: {filterResult === 'good' ? 'Passed' : filterResult === 'bad' ? 'Failed' : 'Uncertain'}
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               {stats.map((stat) => (
                 <div key={stat.label} className="bg-white rounded-xl shadow-sm p-6">
@@ -724,6 +865,24 @@ const AdminDashboard = () => {
                 </div>
               ))}
             </div>
+
+            {/* Quality breakdown */}
+            {dashboardStats.qualityBreakdown && (
+              <div className="grid grid-cols-3 gap-4 mb-8">
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
+                  <p className="text-2xl font-bold text-green-600">{dashboardStats.qualityBreakdown.passed}</p>
+                  <p className="text-sm text-gray-500">Passed</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-red-500">
+                  <p className="text-2xl font-bold text-red-600">{dashboardStats.qualityBreakdown.failed}</p>
+                  <p className="text-sm text-gray-500">Failed</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-amber-500">
+                  <p className="text-2xl font-bold text-amber-600">{dashboardStats.qualityBreakdown.uncertain}</p>
+                  <p className="text-sm text-gray-500">Uncertain</p>
+                </div>
+              </div>
+            )}
 
             {loadingReports ? (
               <div className="bg-white rounded-xl shadow-sm p-6 mb-8 text-sm text-gray-500">
@@ -1068,15 +1227,30 @@ const AdminDashboard = () => {
           <section>
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Analysed Reports</h2>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
-                <input
-                  type="text"
-                  placeholder="Search reports..."
-                  value={reportSearch}
-                  onChange={(e) => setReportSearch(e.target.value)}
-                  className="border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm"
-                />
+              <div className="flex items-center gap-3">
+                {filteredReports.some(r => r.errors?.length > 0) && (
+                  <button
+                    onClick={() => {
+                      const allExpanded = filteredReports.every(r => expandedReports[r._id]);
+                      const next = {};
+                      filteredReports.forEach(r => { next[r._id] = !allExpanded; });
+                      setExpandedReports(next);
+                    }}
+                    className="text-sm text-indigo-600 border border-indigo-200 rounded-lg px-3 py-2 hover:bg-indigo-50"
+                  >
+                    {filteredReports.every(r => expandedReports[r._id]) ? 'Collapse All' : 'Expand All'}
+                  </button>
+                )}
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                  <input
+                    type="text"
+                    placeholder="Search reports..."
+                    value={reportSearch}
+                    onChange={(e) => setReportSearch(e.target.value)}
+                    className="border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm"
+                  />
+                </div>
               </div>
             </div>
 
@@ -1108,17 +1282,28 @@ const AdminDashboard = () => {
 
                         {report.errors?.length > 0 && (
                           <div className="border-t border-gray-100 pt-3">
-                            <p className="text-xs font-semibold text-gray-600 mb-2">Errors Detected:</p>
-                            <div className="space-y-1">
-                              {report.errors.map((error, index) => (
-                                <div key={error._id || index} className="flex items-center gap-3">
-                                  <span className="text-xs px-2 py-0.5 rounded font-medium min-w-[80px] text-center bg-gray-100 text-gray-700">
-                                    {error.type}
-                                  </span>
-                                  <span className="text-sm text-gray-600">{error.message}</span>
-                                </div>
-                              ))}
-                            </div>
+                            <button
+                              onClick={() => setExpandedReports(prev => ({ ...prev, [report._id]: !prev[report._id] }))}
+                              className="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-indigo-600 transition-colors mb-2"
+                            >
+                              {expandedReports[report._id]
+                                ? <ChevronDown className="w-4 h-4" />
+                                : <ChevronRight className="w-4 h-4" />
+                              }
+                              Errors Detected ({report.errors.length})
+                            </button>
+                            {expandedReports[report._id] && (
+                              <div className="space-y-1 ml-5">
+                                {report.errors.map((error, index) => (
+                                  <div key={error._id || index} className="flex items-center gap-3">
+                                    <span className="text-xs px-2 py-0.5 rounded font-medium min-w-[80px] text-center bg-gray-100 text-gray-700">
+                                      {error.type}
+                                    </span>
+                                    <span className="text-sm text-gray-600">{error.message}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1721,9 +1906,112 @@ const AdminDashboard = () => {
             {/* Team Analytics Overlay */}
             {showTeamAnalytics && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Team Analytics</h3>
-                  <p className="text-sm text-gray-500 mb-5">{teams.find(t => t._id === manageTeamId)?.name}</p>
+                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between items-start mb-5">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Team Analytics</h3>
+                      <p className="text-sm text-gray-500">
+                        {teams.find(t => t._id === manageTeamId)?.name}
+                        {teamStats?.teamLead && (
+                          <span className="ml-2 text-xs text-indigo-600 font-medium">Lead: {teamStats.teamLead.name}</span>
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => { setShowTeamAnalytics(false); setTeamStats(null); }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Team Analytics Filters */}
+                  <div className="bg-gray-50 rounded-lg p-4 mb-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Filter className="w-4 h-4 text-indigo-600" />
+                      <h4 className="text-sm font-semibold text-gray-700">Filter Analytics</h4>
+                      {(teamFilterRange !== 'all' || teamFilterUser || teamFilterResult) && (
+                        <button
+                          onClick={() => { setTeamFilterRange('all'); setTeamFilterUser(''); setTeamFilterResult(''); fetchTeamStats('all', '', ''); }}
+                          className="ml-auto text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                        >
+                          Clear all filters
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Date Range</label>
+                        <select
+                          value={teamFilterRange}
+                          onChange={(e) => { setTeamFilterRange(e.target.value); fetchTeamStats(e.target.value, teamFilterUser, teamFilterResult); }}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                          <option value="all">All Time</option>
+                          <option value="7">Last 7 Days</option>
+                          <option value="30">Last 30 Days</option>
+                          <option value="90">Last 90 Days</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Member</label>
+                        <select
+                          value={teamFilterUser}
+                          onChange={(e) => { setTeamFilterUser(e.target.value); fetchTeamStats(teamFilterRange, e.target.value, teamFilterResult); }}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                          <option value="">All Members</option>
+                          {(() => {
+                            const currentTeam = teams.find(t => t._id === manageTeamId);
+                            return (currentTeam?.members || []).map(m => {
+                              const member = typeof m === 'object' ? m : null;
+                              return member ? (
+                                <option key={member._id} value={member._id}>{member.name}</option>
+                              ) : null;
+                            });
+                          })()}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Result</label>
+                        <select
+                          value={teamFilterResult}
+                          onChange={(e) => { setTeamFilterResult(e.target.value); fetchTeamStats(teamFilterRange, teamFilterUser, e.target.value); }}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                          <option value="">All Results</option>
+                          <option value="good">Passed</option>
+                          <option value="bad">Failed</option>
+                          <option value="uncertain">Uncertain</option>
+                        </select>
+                      </div>
+                    </div>
+                    {/* Active filter pills */}
+                    {(teamFilterRange !== 'all' || teamFilterUser || teamFilterResult) && (
+                      <div className="flex items-center gap-2 flex-wrap mt-3 text-sm">
+                        <span className="text-indigo-700 font-medium text-xs">Showing:</span>
+                        {teamFilterRange !== 'all' && (
+                          <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                            Last {teamFilterRange} days
+                          </span>
+                        )}
+                        {teamFilterUser && (
+                          <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                            Member: {(() => {
+                              const currentTeam = teams.find(t => t._id === manageTeamId);
+                              const member = currentTeam?.members?.find(m => (typeof m === 'object' ? m._id : m) === teamFilterUser);
+                              return typeof member === 'object' ? member.name : 'Unknown';
+                            })()}
+                          </span>
+                        )}
+                        {teamFilterResult && (
+                          <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                            Result: {teamFilterResult === 'good' ? 'Passed' : teamFilterResult === 'bad' ? 'Failed' : 'Uncertain'}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {teamStatsLoading ? (
                     <p className="text-gray-400 text-sm text-center py-8 animate-pulse">Loading analytics...</p>
@@ -1777,6 +2065,28 @@ const AdminDashboard = () => {
                         </div>
                       </div>
 
+                      {/* Quality Assessment Breakdown */}
+                      {teamStats.qualityBreakdown && (
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-green-600">{teamStats.qualityBreakdown.passed}</p>
+                            <p className="text-xs text-gray-500 mt-1">Passed</p>
+                          </div>
+                          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-red-600">{teamStats.qualityBreakdown.failed}</p>
+                            <p className="text-xs text-gray-500 mt-1">Failed</p>
+                          </div>
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-amber-600">{teamStats.qualityBreakdown.uncertain}</p>
+                            <p className="text-xs text-gray-500 mt-1">Uncertain</p>
+                          </div>
+                          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-gray-600">{teamStats.qualityBreakdown.pending}</p>
+                            <p className="text-xs text-gray-500 mt-1">Pending</p>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Charts */}
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                         <div className="border border-gray-200 rounded-xl p-4">
@@ -1804,7 +2114,7 @@ const AdminDashboard = () => {
                       </div>
 
                       {/* Time savings */}
-                      <div className="border border-gray-200 rounded-xl p-4">
+                      <div className="border border-gray-200 rounded-xl p-4 mb-6">
                         <h4 className="text-sm font-semibold text-gray-900 mb-3">Time Savings Analysis</h4>
                         <div className="grid grid-cols-3 gap-3">
                           <div className="bg-purple-100 rounded-lg p-4 text-center">
@@ -1821,6 +2131,78 @@ const AdminDashboard = () => {
                           </div>
                         </div>
                       </div>
+
+                      {/* Member Breakdown */}
+                      {teamStats.memberBreakdown?.length > 0 && (
+                        <div className="border border-gray-200 rounded-xl p-4 mb-6">
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Member Breakdown</h4>
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-gray-500 bg-gray-50">
+                                <th className="pb-2 pt-2 px-3">Member</th>
+                                <th className="pb-2 pt-2 px-3 text-center">Reports</th>
+                                <th className="pb-2 pt-2 px-3 text-center">Errors</th>
+                                <th className="pb-2 pt-2 px-3 text-center">Passed</th>
+                                <th className="pb-2 pt-2 px-3 text-center">Failed</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {teamStats.memberBreakdown.map(m => (
+                                <tr key={m._id} className="border-t border-gray-100 hover:bg-gray-50">
+                                  <td className="py-2.5 px-3">
+                                    <p className="font-medium text-gray-900">{m.name}</p>
+                                    <p className="text-xs text-gray-400">{m.email}</p>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-center text-gray-700">{m.reportsCount}</td>
+                                  <td className="py-2.5 px-3 text-center text-red-600 font-medium">{m.errorsFound}</td>
+                                  <td className="py-2.5 px-3 text-center text-green-600 font-medium">{m.passed}</td>
+                                  <td className="py-2.5 px-3 text-center text-red-600 font-medium">{m.failed}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Recent Reports */}
+                      {teamStats.recentReports?.length > 0 && (
+                        <div className="border border-gray-200 rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Recent Reports</h4>
+                          <div className="space-y-2">
+                            {teamStats.recentReports.map(r => (
+                              <div key={r._id} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">{r.filename}</p>
+                                  <p className="text-xs text-gray-400">
+                                    by {r.analyzedBy} — {new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-3 ml-4">
+                                  <span className="text-xs text-red-500 font-medium">{r.errorCount} errors</span>
+                                  {r.result === 'good' && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-green-100 text-green-700">Passed</span>
+                                  )}
+                                  {r.result === 'bad' && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-700">Failed</span>
+                                  )}
+                                  {r.result === 'uncertain' && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-700">Uncertain</span>
+                                  )}
+                                  {!r.result && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-500">{r.status}</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {teamStats.totalReports === 0 && (
+                        <div className="bg-gray-50 rounded-xl p-8 text-center">
+                          <p className="text-gray-400 text-sm">No reports have been submitted by members of this team yet.</p>
+                        </div>
+                      )}
                     </>
                   ) : null}
 

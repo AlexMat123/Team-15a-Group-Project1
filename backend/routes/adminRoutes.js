@@ -12,15 +12,46 @@ const { buildTrainingExamplesFromLabeledReports, processTrainingExample } = requ
 const { sendTeamAssignmentEmail, sendTeamLeadAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
 
 
-// GET /api/admin/stats
+// GET /api/admin/stats?range=7d|30d|90d|all&team=teamId&user=userId&result=good|bad|uncertain
 router.get('/stats', protect, authorize('admin'), async (req, res) => {
 
   try {
+    const { range, team, user: userId, result } = req.query;
     const totalUsers = await User.countDocuments({ role: { $ne: 'admin' } });
-    const totalReports = await Report.countDocuments();
 
-    const reports = await Report.find();
+    // Build report query filter
+    const filter = {};
 
+    // Date range filter
+    if (range && range !== 'all') {
+      const days = parseInt(range);
+      if (!isNaN(days) && days > 0) {
+        filter.createdAt = { $gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) };
+      }
+    }
+
+    // Team filter — only include reports from members of the selected team
+    if (team) {
+      const teamDoc = await Team.findById(team);
+      if (teamDoc) {
+        const memberIds = teamDoc.members.map(m => m.toString());
+        filter.analyzedBy = { $in: memberIds };
+      }
+    }
+
+    // User filter
+    if (userId) {
+      filter.analyzedBy = userId;
+    }
+
+    // Result filter
+    if (result) {
+      filter['qualityAssessment.label'] = result;
+    }
+
+    const reports = await Report.find(filter);
+
+    const totalReports = reports.length;
     const totalErrors = reports.reduce((sum, r) => sum + (r.errorCount || 0), 0);
     const totalTimeSaved = reports.reduce((sum, r) => sum + (r.timeSaved || 0), 0);
 
@@ -32,8 +63,13 @@ router.get('/stats', protect, authorize('admin'), async (req, res) => {
       { name: 'Missing Data', value: reports.reduce((sum, r) => sum + (r.errorSummary?.missing_data || 0), 0) },
     ];
 
-    const manualTime = parseFloat((totalTimeSaved / 0.16).toFixed(1)); // ~84% time saved ratio
+    const manualTime = parseFloat((totalTimeSaved / 0.16).toFixed(1));
     const timeSavedPercent = manualTime > 0 ? Math.round((totalTimeSaved / manualTime) * 100) : 0;
+
+    // Quality assessment counts
+    const passed = reports.filter(r => r.qualityAssessment?.label === 'good').length;
+    const failed = reports.filter(r => r.qualityAssessment?.label === 'bad').length;
+    const uncertain = reports.filter(r => r.qualityAssessment?.label === 'uncertain').length;
 
     res.json({
       totalUsers,
@@ -44,6 +80,7 @@ router.get('/stats', protect, authorize('admin'), async (req, res) => {
       aiTime: Math.round(manualTime - totalTimeSaved),
       timeSavedPercent,
       errorBreakdown,
+      qualityBreakdown: { passed, failed, uncertain },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -306,7 +343,11 @@ router.patch('/teams/:id/members', protect, authorize('admin'), async (req, res)
     // Merge new members with existing, avoiding duplicates
     const existingIds = team.members.map(id => id.toString());
     const newIds = memberIds.filter(id => !existingIds.includes(id));
-    team.members.push(...newIds);
+    const now = new Date();
+    newIds.forEach(id => {
+      team.members.push(id);
+      team.memberJoinDates.set(id, now);
+    });
     await team.save();
 
     // Send team assignment emails to newly added members
@@ -350,6 +391,7 @@ router.delete('/teams/:id/members/:userId', protect, authorize('admin'), async (
     const removedUser = await User.findById(req.params.userId).select('email').lean();
 
     team.members = team.members.filter(m => m.toString() !== req.params.userId);
+    team.memberJoinDates.delete(req.params.userId);
 
     // Clear teamLead if the removed member was the lead and revert their role
     if (team.teamLead && team.teamLead.toString() === req.params.userId) {
@@ -445,14 +487,46 @@ router.delete('/teams/:id', protect, authorize('admin'), async (req, res) => {
   }
 });
 
-// GET /api/admin/teams/:id/stats
+// GET /api/admin/teams/:id/stats?range=7|30|90|all&user=userId&result=good|bad|uncertain
 router.get('/teams/:id/stats', protect, authorize('admin'), async (req, res) => {
   try {
-    const team = await Team.findById(req.params.id);
+    const { range, user: userId, result } = req.query;
+
+    const team = await Team.findById(req.params.id)
+      .populate('members', 'name email')
+      .populate('teamLead', 'name email');
     if (!team) return res.status(404).json({ message: 'Team not found' });
 
-    const memberIds = team.members.map(m => m.toString());
-    const reports = await Report.find({ analyzedBy: { $in: memberIds } });
+    const memberIds = team.members.map(m => (typeof m === 'object' ? m._id.toString() : m.toString()));
+
+    // Build query filter
+    const filter = { analyzedBy: userId ? userId : { $in: memberIds } };
+
+    // Date range filter
+    if (range && range !== 'all') {
+      const days = parseInt(range);
+      if (!isNaN(days) && days > 0) {
+        filter.createdAt = { $gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) };
+      }
+    }
+
+    // Result filter
+    if (result) {
+      filter['qualityAssessment.label'] = result;
+    }
+
+    const allMemberReports = await Report.find(filter)
+      .populate('analyzedBy', 'name email')
+      .sort({ createdAt: -1 });
+
+    // Only include reports created after the member joined this team
+    const reports = allMemberReports.filter(r => {
+      const rUserId = typeof r.analyzedBy === 'object' ? r.analyzedBy._id.toString() : r.analyzedBy.toString();
+      const joinDate = team.memberJoinDates?.get(rUserId);
+      // If no join date recorded (legacy member), include all their reports
+      if (!joinDate) return true;
+      return new Date(r.createdAt) >= new Date(joinDate);
+    });
 
     const totalReports = reports.length;
     const totalErrors = reports.reduce((sum, r) => sum + (r.errorCount || 0), 0);
@@ -469,6 +543,41 @@ router.get('/teams/:id/stats', protect, authorize('admin'), async (req, res) => 
     const manualTime = parseFloat((totalTimeSaved / 0.16).toFixed(1));
     const timeSavedPercent = manualTime > 0 ? Math.round((totalTimeSaved / manualTime) * 100) : 0;
 
+    // Quality assessment breakdown
+    const passed = reports.filter(r => r.qualityAssessment?.label === 'good').length;
+    const failed = reports.filter(r => r.qualityAssessment?.label === 'bad').length;
+    const uncertain = reports.filter(r => r.qualityAssessment?.label === 'uncertain').length;
+    const pending = reports.filter(r => r.status === 'pending' || r.status === 'processing').length;
+
+    // Per-member breakdown (filtered by join date per member)
+    const memberBreakdown = team.members.map(member => {
+      const mId = typeof member === 'object' ? member._id.toString() : member.toString();
+      const memberReports = reports.filter(r => {
+        const rId = typeof r.analyzedBy === 'object' ? r.analyzedBy._id.toString() : r.analyzedBy.toString();
+        return rId === mId;
+      });
+      return {
+        _id: mId,
+        name: typeof member === 'object' ? member.name : 'Unknown',
+        email: typeof member === 'object' ? member.email : '',
+        reportsCount: memberReports.length,
+        errorsFound: memberReports.reduce((sum, r) => sum + (r.errorCount || 0), 0),
+        passed: memberReports.filter(r => r.qualityAssessment?.label === 'good').length,
+        failed: memberReports.filter(r => r.qualityAssessment?.label === 'bad').length,
+      };
+    });
+
+    // Recent reports (last 10)
+    const recentReports = reports.slice(0, 10).map(r => ({
+      _id: r._id,
+      filename: r.filename,
+      analyzedBy: r.analyzedBy?.name || 'Unknown',
+      status: r.status,
+      errorCount: r.errorCount || 0,
+      result: r.qualityAssessment?.label || null,
+      createdAt: r.createdAt,
+    }));
+
     res.json({
       totalMembers: memberIds.length,
       totalReports,
@@ -478,6 +587,10 @@ router.get('/teams/:id/stats', protect, authorize('admin'), async (req, res) => 
       aiTime: Math.round(manualTime - totalTimeSaved),
       timeSavedPercent,
       errorBreakdown,
+      qualityBreakdown: { passed, failed, uncertain, pending },
+      memberBreakdown,
+      recentReports,
+      teamLead: team.teamLead ? { name: team.teamLead.name, email: team.teamLead.email } : null,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
