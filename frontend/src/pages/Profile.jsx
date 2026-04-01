@@ -10,6 +10,19 @@ import {
   FileText,
   Loader2,
 } from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
@@ -24,11 +37,17 @@ const Profile = () => {
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [analyticsError, setAnalyticsError] = useState('');
   const [expandedReports, setExpandedReports] = useState({});
+  const [selectedScope, setSelectedScope] = useState('all');
 
   useEffect(() => {
     const fetchProfileAnalytics = async () => {
+      setAnalyticsLoading(true);
+      setAnalyticsError('');
+
       try {
-        const response = await api.get('/reports/profile-analytics');
+        const response = await api.get('/reports/profile-analytics', {
+          params: { scope: selectedScope },
+        });
         setAnalytics(response.data);
       } catch (error) {
         setAnalyticsError(
@@ -40,7 +59,7 @@ const Profile = () => {
     };
 
     fetchProfileAnalytics();
-  }, []);
+  }, [selectedScope]);
 
   const handleRequestPasswordReset = async () => {
     setSubmitting(true);
@@ -179,6 +198,45 @@ const Profile = () => {
     },
   ];
 
+  const passRateMaxValue = 100;
+  const qualityScoreMaxValue = analytics?.qualityScoreTrend?.reduce((max, report) => {
+    return Math.max(max, report.qualityScore || 0);
+  }, 0) ?? 0;
+  const errorTypeLabelMap = {
+    placeholder: 'Placeholder',
+    consistency: 'Consistency',
+    compliance: 'Compliance',
+    formatting: 'Formatting',
+    missing_data: 'Missing Data',
+  };
+  const errorTypeColors = ['#F97316', '#2563EB', '#DC2626', '#9333EA', '#16A34A'];
+  const commonErrorTypeChartData = analytics?.mostCommonErrorTypes?.map((item, index) => ({
+    name: errorTypeLabelMap[item.type] || item.type,
+    errors: item.count,
+    reportsAffected: item.reportsAffected,
+    fill: errorTypeColors[index % errorTypeColors.length],
+  })) || [];
+  const checklistChartData = analytics?.checklistFailureBreakdown?.map((item, index) => ({
+    shortLabel: item.message.length > 28 ? `${item.message.slice(0, 28)}...` : item.message,
+    fullLabel: item.message,
+    count: item.count,
+  })) || [];
+  const qualityScoreChartData = analytics?.qualityScoreTrend?.map((report) => ({
+    label: report.filename.length > 18 ? `${report.filename.slice(0, 18)}...` : report.filename,
+    fullLabel: report.filename,
+    score: report.qualityScore,
+    date: formatDate(report.createdAt),
+  })) || [];
+  const passRateChartData = analytics?.passFailRateTrends || [];
+  const averageErrorTypeBreakdown = errorSummaryCards.map((card) => {
+    const totalForType = analytics?.errorBreakdown?.[card.key] ?? 0;
+    const analyzedReports = analytics?.summary?.analyzedReports ?? 0;
+
+    return {
+      ...card,
+      average: analyzedReports > 0 ? Number((totalForType / analyzedReports).toFixed(2)) : 0,
+    };
+  });
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
@@ -212,12 +270,27 @@ const Profile = () => {
         </div>
 
         <section className="bg-white rounded-2xl shadow-sm p-6 mt-6">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Report Analytics</h2>
               <p className="text-gray-600 mt-1">
                 A summary of your previously uploaded reports.
               </p>
+            </div>
+            <div className="w-full sm:w-56">
+              <label htmlFor="analytics-scope" className="block text-sm font-medium text-gray-700 mb-2">
+                Time Range
+              </label>
+              <select
+                id="analytics-scope"
+                value={selectedScope}
+                onChange={(event) => setSelectedScope(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              >
+                <option value="week">Week</option>
+                <option value="month">Month</option>
+                <option value="all">All Time</option>
+              </select>
             </div>
           </div>
 
@@ -275,6 +348,175 @@ const Profile = () => {
                   <p className="text-2xl font-semibold text-gray-900 mt-2">
                     {analytics.qualityBreakdown?.good ?? 0}
                   </p>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold text-gray-900">Average Errors Per Report</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  The average number of each error type found per analyzed report.
+                </p>
+
+                <div className="rounded-xl border border-gray-200 p-5 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+                    {averageErrorTypeBreakdown.map((item) => (
+                      <div
+                        key={item.key}
+                        className={`rounded-xl px-4 py-4 text-center border border-transparent ${item.cardClass}`}
+                      >
+                        <p className={`text-2xl font-bold ${item.valueClass}`}>{item.average}</p>
+                        <p className="text-sm text-gray-700 mt-1">{item.label}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    <div className="rounded-xl bg-white border border-gray-200 p-4">
+                      <p className="text-sm text-gray-500">Analyzed Reports</p>
+                      <p className="text-2xl font-semibold text-gray-900 mt-2">
+                        {analytics.summary?.analyzedReports ?? 0}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white border border-gray-200 p-4">
+                      <p className="text-sm text-gray-500">Overall Average Errors</p>
+                      <p className="text-2xl font-semibold text-gray-900 mt-2">
+                        {analytics.summary?.averageErrorsPerReport ?? 0}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold text-gray-900">Pass Rate Over Time</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Monthly pass percentage based on analyzed reports marked as passed.
+                </p>
+
+                <div className="rounded-xl border border-gray-200 p-5 mt-4">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={passRateChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                      <XAxis dataKey="periodLabel" tick={{ fontSize: 12 }} />
+                      <YAxis domain={[0, passRateMaxValue]} tick={{ fontSize: 12 }} />
+                      <Tooltip
+                        formatter={(value, name, item) => {
+                          if (name === 'Pass Rate') {
+                            return [`${value}%`, name];
+                          }
+                          return [value, name];
+                        }}
+                        labelFormatter={(label, payload) => {
+                          const point = payload?.[0]?.payload;
+                          if (!point) return label;
+                          return `${label} - ${point.passedCount}/${point.analyzedCount} passed`;
+                        }}
+                      />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="passRate"
+                        name="Pass Rate"
+                        stroke="#16A34A"
+                        strokeWidth={3}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold text-gray-900">Quality Score Trend</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Per-report quality score over time based on the stored quality assessment.
+                </p>
+
+                <div className="rounded-xl border border-gray-200 p-5 mt-4">
+                  {analytics.qualityScoreTrend?.length ? (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <LineChart data={qualityScoreChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                        <YAxis domain={[0, Math.max(qualityScoreMaxValue, 100)]} tick={{ fontSize: 12 }} />
+                        <Tooltip
+                          formatter={(value) => [`${value}`, 'Quality Score']}
+                          labelFormatter={(label, payload) => {
+                            const point = payload?.[0]?.payload;
+                            return point ? `${point.fullLabel} - ${point.date}` : label;
+                          }}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="score"
+                          name="Quality Score"
+                          stroke="#10B981"
+                          strokeWidth={3}
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-sm text-gray-500">No analyzed reports with quality scores yet.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold text-gray-900">Most Common Error Types</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Ranked by frequency so you can see the patterns affecting your reports most often.
+                </p>
+
+                <div className="rounded-xl border border-gray-200 p-5 mt-4">
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={commonErrorTypeChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip
+                        formatter={(value) => [`${value}`, 'Errors']}
+                      />
+                      <Bar dataKey="errors" name="Errors" radius={[6, 6, 0, 0]}>
+                        {commonErrorTypeChartData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.fill} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold text-gray-900">Top Recurring Checklist Failures</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  The most frequently repeated issue messages across all analyzed reports.
+                </p>
+
+                <div className="rounded-xl border border-gray-200 p-5 mt-4">
+                  {analytics.checklistFailureBreakdown?.length ? (
+                    <ResponsiveContainer width="100%" height={320}>
+                      <BarChart
+                        data={checklistChartData}
+                        layout="vertical"
+                        margin={{ top: 10, right: 30, left: 20, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                        <XAxis type="number" tick={{ fontSize: 12 }} />
+                        <YAxis dataKey="shortLabel" type="category" tick={{ fontSize: 12 }} width={55} />
+                        <Tooltip
+                          formatter={(value) => [`${value}`, 'Occurrences']}
+                          labelFormatter={(label, payload) => payload?.[0]?.payload?.fullLabel || label}
+                        />
+                        <Bar dataKey="count" fill="#6366F1" radius={[0, 6, 6, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-sm text-gray-500">No recurring checklist failures found yet.</p>
+                  )}
                 </div>
               </div>
 
