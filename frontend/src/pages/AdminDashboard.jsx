@@ -139,6 +139,9 @@ const AdminDashboard = () => {
   const [showTeamAnalytics, setShowTeamAnalytics] = useState(false);
   const [teamStats, setTeamStats] = useState(null);
   const [teamStatsLoading, setTeamStatsLoading] = useState(false);
+  const [teamFilterRange, setTeamFilterRange] = useState('all');
+  const [teamFilterUser, setTeamFilterUser] = useState('');
+  const [teamFilterResult, setTeamFilterResult] = useState('');
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -521,11 +524,15 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleOpenTeamAnalytics = async () => {
+  const fetchTeamStats = async (range = teamFilterRange, userId = teamFilterUser, result = teamFilterResult) => {
     setTeamStatsLoading(true);
-    setShowTeamAnalytics(true);
     try {
-      const res = await api.get(`/admin/teams/${manageTeamId}/stats`);
+      const params = new URLSearchParams();
+      if (range && range !== 'all') params.append('range', range);
+      if (userId) params.append('user', userId);
+      if (result) params.append('result', result);
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const res = await api.get(`/admin/teams/${manageTeamId}/stats${qs}`);
       setTeamStats(res.data);
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to load team analytics');
@@ -533,6 +540,14 @@ const AdminDashboard = () => {
     } finally {
       setTeamStatsLoading(false);
     }
+  };
+
+  const handleOpenTeamAnalytics = async () => {
+    setTeamFilterRange('all');
+    setTeamFilterUser('');
+    setTeamFilterResult('');
+    setShowTeamAnalytics(true);
+    fetchTeamStats('all', '', '');
   };
 
   const handleDeleteTeam = async () => {
@@ -1579,6 +1594,94 @@ const AdminDashboard = () => {
                     >
                       <X className="w-5 h-5" />
                     </button>
+                  </div>
+
+                  {/* Team Analytics Filters */}
+                  <div className="bg-gray-50 rounded-lg p-4 mb-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Filter className="w-4 h-4 text-indigo-600" />
+                      <h4 className="text-sm font-semibold text-gray-700">Filter Analytics</h4>
+                      {(teamFilterRange !== 'all' || teamFilterUser || teamFilterResult) && (
+                        <button
+                          onClick={() => { setTeamFilterRange('all'); setTeamFilterUser(''); setTeamFilterResult(''); fetchTeamStats('all', '', ''); }}
+                          className="ml-auto text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                        >
+                          Clear all filters
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Date Range</label>
+                        <select
+                          value={teamFilterRange}
+                          onChange={(e) => { setTeamFilterRange(e.target.value); fetchTeamStats(e.target.value, teamFilterUser, teamFilterResult); }}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                          <option value="all">All Time</option>
+                          <option value="7">Last 7 Days</option>
+                          <option value="30">Last 30 Days</option>
+                          <option value="90">Last 90 Days</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Member</label>
+                        <select
+                          value={teamFilterUser}
+                          onChange={(e) => { setTeamFilterUser(e.target.value); fetchTeamStats(teamFilterRange, e.target.value, teamFilterResult); }}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                          <option value="">All Members</option>
+                          {(() => {
+                            const currentTeam = teams.find(t => t._id === manageTeamId);
+                            return (currentTeam?.members || []).map(m => {
+                              const member = typeof m === 'object' ? m : null;
+                              return member ? (
+                                <option key={member._id} value={member._id}>{member.name}</option>
+                              ) : null;
+                            });
+                          })()}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Result</label>
+                        <select
+                          value={teamFilterResult}
+                          onChange={(e) => { setTeamFilterResult(e.target.value); fetchTeamStats(teamFilterRange, teamFilterUser, e.target.value); }}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                          <option value="">All Results</option>
+                          <option value="good">Passed</option>
+                          <option value="bad">Failed</option>
+                          <option value="uncertain">Uncertain</option>
+                        </select>
+                      </div>
+                    </div>
+                    {/* Active filter pills */}
+                    {(teamFilterRange !== 'all' || teamFilterUser || teamFilterResult) && (
+                      <div className="flex items-center gap-2 flex-wrap mt-3 text-sm">
+                        <span className="text-indigo-700 font-medium text-xs">Showing:</span>
+                        {teamFilterRange !== 'all' && (
+                          <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                            Last {teamFilterRange} days
+                          </span>
+                        )}
+                        {teamFilterUser && (
+                          <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                            Member: {(() => {
+                              const currentTeam = teams.find(t => t._id === manageTeamId);
+                              const member = currentTeam?.members?.find(m => (typeof m === 'object' ? m._id : m) === teamFilterUser);
+                              return typeof member === 'object' ? member.name : 'Unknown';
+                            })()}
+                          </span>
+                        )}
+                        {teamFilterResult && (
+                          <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                            Result: {teamFilterResult === 'good' ? 'Passed' : teamFilterResult === 'bad' ? 'Failed' : 'Uncertain'}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {teamStatsLoading ? (

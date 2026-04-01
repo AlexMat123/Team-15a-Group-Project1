@@ -403,9 +403,11 @@ router.delete('/teams/:id', protect, authorize('admin'), async (req, res) => {
   }
 });
 
-// GET /api/admin/teams/:id/stats
+// GET /api/admin/teams/:id/stats?range=7|30|90|all&user=userId&result=good|bad|uncertain
 router.get('/teams/:id/stats', protect, authorize('admin'), async (req, res) => {
   try {
+    const { range, user: userId, result } = req.query;
+
     const team = await Team.findById(req.params.id)
       .populate('members', 'name email')
       .populate('teamLead', 'name email');
@@ -413,8 +415,23 @@ router.get('/teams/:id/stats', protect, authorize('admin'), async (req, res) => 
 
     const memberIds = team.members.map(m => (typeof m === 'object' ? m._id.toString() : m.toString()));
 
-    // Fetch all reports by team members, then filter by join date
-    const allMemberReports = await Report.find({ analyzedBy: { $in: memberIds } })
+    // Build query filter
+    const filter = { analyzedBy: userId ? userId : { $in: memberIds } };
+
+    // Date range filter
+    if (range && range !== 'all') {
+      const days = parseInt(range);
+      if (!isNaN(days) && days > 0) {
+        filter.createdAt = { $gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) };
+      }
+    }
+
+    // Result filter
+    if (result) {
+      filter['qualityAssessment.label'] = result;
+    }
+
+    const allMemberReports = await Report.find(filter)
       .populate('analyzedBy', 'name email')
       .sort({ createdAt: -1 });
 
