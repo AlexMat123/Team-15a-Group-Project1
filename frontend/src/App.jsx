@@ -9,6 +9,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import Unauthorized from './pages/Unauthorized';
 import TeamPage from './pages/TeamPage';
 import Profile from './pages/Profile'; 
+import Settings from './pages/Settings';
 
 function App() {
   return (
@@ -67,6 +68,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <Profile/>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
               </ProtectedRoute>
             }
           />
