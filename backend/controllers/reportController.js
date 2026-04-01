@@ -362,6 +362,13 @@ const getProfileAnalytics = async (req, res) => {
       errorCount: report.errorCount || 0,
       timeSaved: report.timeSaved || 0,
       qualityLabel: report.qualityAssessment?.label || null,
+      errorSummary: {
+        placeholder: report.errorSummary?.placeholder || 0,
+        consistency: report.errorSummary?.consistency || 0,
+        compliance: report.errorSummary?.compliance || 0,
+        formatting: report.errorSummary?.formatting || 0,
+        missing_data: report.errorSummary?.missing_data || 0,
+      },
     }));
 
     res.json({
