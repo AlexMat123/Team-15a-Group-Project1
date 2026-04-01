@@ -143,6 +143,26 @@ const AdminDashboard = () => {
   const [teamFilterUser, setTeamFilterUser] = useState('');
   const [teamFilterResult, setTeamFilterResult] = useState('');
 
+  // --- Training state ---
+  const [trainingExamples, setTrainingExamples] = useState([]);
+  const [trainingStats, setTrainingStats] = useState({
+    totalExamples: 0,
+    trainedExamples: 0,
+    pendingExamples: 0,
+    goodExamples: 0,
+    badExamples: 0,
+    templates: 0,
+  });
+  const [loadingTraining, setLoadingTraining] = useState(true);
+  const [trainingFile, setTrainingFile] = useState(null);
+  const [trainingType, setTrainingType] = useState('good');
+  const [uploadingTraining, setUploadingTraining] = useState(false);
+  const [trainingMessage, setTrainingMessage] = useState('');
+  const [trainingError, setTrainingError] = useState('');
+  const [syncingTraining, setSyncingTraining] = useState(false);
+  const [deletingExampleId, setDeletingExampleId] = useState('');
+  const [dragActive, setDragActive] = useState(false);
+
   const fetchUsers = async () => {
     setLoadingUsers(true);
 
@@ -275,10 +295,124 @@ const AdminDashboard = () => {
     fetchDashboardData(filterRange, filterTeam, filterUser, filterResult);
   }, [filterRange, filterTeam, filterUser, filterResult]);
 
+  const fetchTrainingData = async () => {
+    setLoadingTraining(true);
+    try {
+      const [examplesRes, statsRes] = await Promise.all([
+        api.get('/admin/training/examples'),
+        api.get('/admin/training/stats'),
+      ]);
+      setTrainingExamples(examplesRes.data);
+      setTrainingStats(statsRes.data);
+      setTrainingError('');
+    } catch (error) {
+      setTrainingError(error.response?.data?.message || 'Failed to load training data');
+    } finally {
+      setLoadingTraining(false);
+    }
+  };
+
+  const handleTrainingUpload = async (e) => {
+    e.preventDefault();
+    if (!trainingFile) {
+      setTrainingError('Please select a PDF file');
+      return;
+    }
+
+    setUploadingTraining(true);
+    setTrainingMessage('');
+    setTrainingError('');
+
+    const formData = new FormData();
+    formData.append('pdf', trainingFile);
+    formData.append('type', trainingType);
+
+    try {
+      const response = await api.post('/admin/training/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setTrainingMessage(response.data.message || 'Training example uploaded successfully');
+      setTrainingFile(null);
+      setTrainingType('good');
+      await fetchTrainingData();
+    } catch (error) {
+      setTrainingError(error.response?.data?.message || 'Failed to upload training example');
+    } finally {
+      setUploadingTraining(false);
+    }
+  };
+
+  const handleDeleteTrainingExample = async (exampleId) => {
+    if (!window.confirm('Are you sure you want to delete this training example?')) return;
+
+    setDeletingExampleId(exampleId);
+    setTrainingMessage('');
+    setTrainingError('');
+
+    try {
+      const response = await api.delete(`/admin/training/examples/${exampleId}`);
+      setTrainingMessage(response.data.message || 'Training example deleted');
+      await fetchTrainingData();
+    } catch (error) {
+      setTrainingError(error.response?.data?.message || 'Failed to delete training example');
+    } finally {
+      setDeletingExampleId('');
+    }
+  };
+
+  const handleSyncTraining = async () => {
+    setSyncingTraining(true);
+    setTrainingMessage('');
+    setTrainingError('');
+
+    try {
+      const response = await api.post('/admin/training/sync');
+      setTrainingMessage(response.data.message || 'Training examples synced');
+      await fetchTrainingData();
+    } catch (error) {
+      setTrainingError(error.response?.data?.message || 'Failed to sync training');
+    } finally {
+      setSyncingTraining(false);
+    }
+  };
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.type === 'application/pdf') {
+        setTrainingFile(file);
+        setTrainingError('');
+      } else {
+        setTrainingError('Only PDF files are allowed');
+      }
+    }
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setTrainingFile(e.target.files[0]);
+      setTrainingError('');
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchPasswordResetRequest();
     fetchTeams();
+    fetchTrainingData();
   }, []);
 
   const stats = [
@@ -1217,9 +1351,204 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === 'training' && (
-          <section className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-500">
-            <p className="text-lg font-medium">AI Training</p>
-            <p className="text-sm mt-2">Use the Reports tab to add training examples.</p>
+          <section>
+            {/* Training Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white rounded-xl shadow-sm p-4">
+                <p className="text-2xl font-bold text-green-600">{trainingStats.goodExamples}</p>
+                <p className="text-sm text-gray-500">Good Examples</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-4">
+                <p className="text-2xl font-bold text-red-500">{trainingStats.badExamples}</p>
+                <p className="text-sm text-gray-500">Bad Examples</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-4">
+                <p className="text-2xl font-bold text-indigo-600">{trainingStats.trainedExamples}</p>
+                <p className="text-sm text-gray-500">Trained</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-4">
+                <p className="text-2xl font-bold text-amber-500">{trainingStats.pendingExamples}</p>
+                <p className="text-sm text-gray-500">Pending</p>
+              </div>
+            </div>
+
+            {/* Upload Section */}
+            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Training Example</h2>
+              <form onSubmit={handleTrainingUpload}>
+                <div
+                  className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition ${
+                    dragActive
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-gray-300 hover:border-indigo-400'
+                  }`}
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                  onClick={() => document.getElementById('training-file-input').click()}
+                >
+                  <input
+                    id="training-file-input"
+                    type="file"
+                    accept=".pdf"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  {trainingFile ? (
+                    <div className="text-indigo-600">
+                      <FileText className="w-10 h-10 mx-auto mb-2" />
+                      <p className="font-medium">{trainingFile.name}</p>
+                      <p className="text-sm text-gray-500">
+                        {(trainingFile.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-gray-500">
+                      <FileText className="w-10 h-10 mx-auto mb-2 text-gray-400" />
+                      <p className="font-medium">Drop a PDF here or click to upload</p>
+                      <p className="text-sm">Maximum file size: 120MB</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="flex items-center gap-4">
+                    <label className="text-sm font-medium text-gray-700">Type:</label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="trainingType"
+                        value="good"
+                        checked={trainingType === 'good'}
+                        onChange={(e) => setTrainingType(e.target.value)}
+                        className="text-green-600 focus:ring-green-500"
+                      />
+                      <span className="text-sm text-green-600 font-medium">Good Example</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="trainingType"
+                        value="bad"
+                        checked={trainingType === 'bad'}
+                        onChange={(e) => setTrainingType(e.target.value)}
+                        className="text-red-500 focus:ring-red-500"
+                      />
+                      <span className="text-sm text-red-500 font-medium">Bad Example</span>
+                    </label>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!trainingFile || uploadingTraining}
+                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploadingTraining ? 'Uploading...' : 'Upload'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Messages */}
+            {trainingMessage && (
+              <div className="mb-4 px-4 py-3 bg-green-100 text-green-800 rounded-lg text-sm">
+                {trainingMessage}
+              </div>
+            )}
+            {trainingError && (
+              <div className="mb-4 px-4 py-3 bg-red-100 text-red-800 rounded-lg text-sm">
+                {trainingError}
+              </div>
+            )}
+
+            {/* Training Examples List */}
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Training Examples</h2>
+                <button
+                  onClick={handleSyncTraining}
+                  disabled={syncingTraining}
+                  className="text-sm font-medium text-indigo-600 border border-indigo-200 rounded-lg px-4 py-2 hover:bg-indigo-50 disabled:opacity-50"
+                >
+                  {syncingTraining ? 'Syncing...' : 'Sync from Reports'}
+                </button>
+              </div>
+
+              {loadingTraining ? (
+                <p className="text-gray-500 text-sm">Loading training examples...</p>
+              ) : trainingExamples.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-8">
+                  No training examples yet. Upload PDFs above or label reports in the Reports tab.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-left text-gray-600">
+                        <th className="px-4 py-3 font-semibold">Filename</th>
+                        <th className="px-4 py-3 font-semibold">Type</th>
+                        <th className="px-4 py-3 font-semibold">Status</th>
+                        <th className="px-4 py-3 font-semibold">Uploaded</th>
+                        <th className="px-4 py-3 font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trainingExamples.map((example) => (
+                        <tr key={example._id} className="border-b border-gray-100 last:border-b-0">
+                          <td className="px-4 py-4 text-gray-900">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-gray-400" />
+                              <span className="truncate max-w-[200px]">{example.filename}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                                example.type === 'good'
+                                  ? 'bg-green-100 text-green-700'
+                                  : example.type === 'bad'
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {example.type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                                example.status === 'trained'
+                                  ? 'bg-indigo-100 text-indigo-700'
+                                  : example.status === 'processing'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : example.status === 'failed'
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {example.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-gray-600">
+                            {formatDate(example.createdAt)}
+                          </td>
+                          <td className="px-4 py-4">
+                            <button
+                              onClick={() => handleDeleteTrainingExample(example._id)}
+                              disabled={deletingExampleId === example._id}
+                              className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 disabled:opacity-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              {deletingExampleId === example._id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </section>
         )}
 

@@ -44,6 +44,12 @@ const Header = () => {
                   Profile
                 </Link>
 
+                <Link 
+                  to="/settings" 
+                  className="text-sm text-gray-600 hover:text-gray-900">
+                  Settings
+                </Link>
+
 
                 <button
                   onClick={logout}

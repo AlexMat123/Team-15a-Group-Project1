@@ -1,6 +1,7 @@
 const Report = require('../models/Report');
 const TrainingExample = require('../models/TrainingExample');
 const mlService = require('./mlService');
+const { processDocument } = require('./pdfService');
 
 const MIN_TEXT_LENGTH = 200;
 const MAX_GOOD_REFERENCE_ERRORS = 12;
@@ -326,8 +327,53 @@ const applyContextAwareErrorRescoring = async (errors = []) => {
   }
 };
 
+const processTrainingExample = async (exampleId) => {
+  const example = await TrainingExample.findById(exampleId);
+  if (!example) {
+    throw new Error('Training example not found');
+  }
+
+  try {
+    example.status = 'processing';
+    await example.save();
+
+    const pdfResult = await processDocument(example.filePath);
+    const text = (pdfResult.text || '').trim();
+
+    if (text.length < MIN_TEXT_LENGTH) {
+      example.status = 'failed';
+      example.extractedText = text;
+      await example.save();
+      throw new Error('Extracted text too short for training');
+    }
+
+    example.extractedText = text.substring(0, 20000);
+    example.metadata = {
+      pageCount: pdfResult.pageCount || 0,
+      sections: pdfResult.sections?.map((s) => s.title) || [],
+      documentType: 'training-upload',
+    };
+
+    const embedding = await mlService.getEmbedding(normalizeTextForEmbedding(text));
+    if (embedding && embedding.length) {
+      example.embedding = embedding;
+    }
+
+    example.status = 'trained';
+    example.trainedAt = new Date();
+    await example.save();
+
+    return example;
+  } catch (error) {
+    example.status = 'failed';
+    await example.save();
+    throw error;
+  }
+};
+
 module.exports = {
   buildTrainingExamplesFromLabeledReports,
   predictQualityFromTraining,
   applyContextAwareErrorRescoring,
+  processTrainingExample,
 };

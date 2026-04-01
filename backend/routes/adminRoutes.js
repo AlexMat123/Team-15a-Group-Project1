@@ -1,11 +1,14 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const User = require('../models/User');
 const Report = require('../models/Report');
 const Team = require('../models/Team');
 const { protect, authorize } = require('../middleware/authMiddleware');
+const { trainingUpload, handleUploadError } = require('../middleware/uploadMiddleware');
 const TrainingExample = require('../models/TrainingExample');
-const { buildTrainingExamplesFromLabeledReports } = require('../services/trainingService');
+const { buildTrainingExamplesFromLabeledReports, processTrainingExample } = require('../services/trainingService');
 const { sendTeamAssignmentEmail, sendTeamLeadAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
 
 
@@ -180,6 +183,87 @@ router.get('/training/stats', protect, authorize('admin'), async (req, res) => {
   try {
     const stats = await TrainingExample.getTrainingStats();
     res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/training/upload
+router.post(
+  '/training/upload',
+  protect,
+  authorize('admin'),
+  trainingUpload.single('pdf'),
+  handleUploadError,
+  async (req, res) => {
+    try {
+      const { type } = req.body;
+
+      if (!req.file) {
+        return res.status(400).json({ message: 'No PDF file uploaded' });
+      }
+
+      if (!['good', 'bad', 'template'].includes(type)) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ message: 'Type must be "good", "bad", or "template"' });
+      }
+
+      const trainingExample = await TrainingExample.create({
+        filename: req.file.originalname,
+        filePath: req.file.path,
+        fileSize: req.file.size,
+        type,
+        status: 'pending',
+        uploadedBy: req.user._id,
+      });
+
+      processTrainingExample(trainingExample._id).catch((err) => {
+        console.error('Background training processing failed:', err.message);
+      });
+
+      res.status(201).json({
+        message: 'Training example uploaded successfully',
+        example: trainingExample,
+      });
+    } catch (err) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// GET /api/admin/training/examples
+router.get('/training/examples', protect, authorize('admin'), async (req, res) => {
+  try {
+    const examples = await TrainingExample.find()
+      .populate('uploadedBy', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(examples);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/training/examples/:id
+router.delete('/training/examples/:id', protect, authorize('admin'), async (req, res) => {
+  try {
+    const example = await TrainingExample.findById(req.params.id);
+
+    if (!example) {
+      return res.status(404).json({ message: 'Training example not found' });
+    }
+
+    if (example.filePath && fs.existsSync(example.filePath)) {
+      fs.unlinkSync(example.filePath);
+    }
+
+    await example.deleteOne();
+
+    res.json({ message: 'Training example deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
