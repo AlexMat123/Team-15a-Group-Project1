@@ -1,8 +1,14 @@
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 const MAX_PDF_SIZE_MB = 120;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
+
+const trainingDir = path.join(__dirname, '..', 'training');
+if (!fs.existsSync(trainingDir)) {
+  fs.mkdirSync(trainingDir, { recursive: true });
+}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -12,6 +18,17 @@ const storage = multer.diskStorage({
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
     const ext = path.extname(file.originalname);
     cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+  },
+});
+
+const trainingStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'training/');
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const ext = path.extname(file.originalname);
+    cb(null, `training-${uniqueSuffix}${ext}`);
   },
 });
 
@@ -25,6 +42,14 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({
   storage,
+  fileFilter,
+  limits: {
+    fileSize: MAX_PDF_SIZE_BYTES,
+  },
+});
+
+const trainingUpload = multer({
+  storage: trainingStorage,
   fileFilter,
   limits: {
     fileSize: MAX_PDF_SIZE_BYTES,
@@ -46,4 +71,4 @@ const handleUploadError = (err, req, res, next) => {
   next();
 };
 
-module.exports = { upload, handleUploadError };
+module.exports = { upload, trainingUpload, handleUploadError };
