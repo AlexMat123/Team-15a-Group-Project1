@@ -819,4 +819,134 @@ router.get('/teams/:id/stats', protect, authorize('admin'), async (req, res) => 
   }
 });
 
+// GET /api/admin/users/:id/profile-analytics?scope=week|month|all
+router.get('/users/:id/profile-analytics', protect, authorize('admin'), async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const targetUser = await User.findById(userId).select('name email');
+    if (!targetUser) return res.status(404).json({ message: 'User not found' });
+
+    const scope = ['week', 'month', 'all'].includes(req.query.scope) ? req.query.scope : 'all';
+
+    // Build date filter
+    const reportQuery = { analyzedBy: userId };
+    let startDate = null;
+    if (scope === 'week') {
+      startDate = new Date();
+      startDate.setUTCDate(startDate.getUTCDate() - 6);
+      startDate.setUTCHours(0, 0, 0, 0);
+    } else if (scope === 'month') {
+      startDate = new Date();
+      startDate.setUTCDate(startDate.getUTCDate() - 29);
+      startDate.setUTCHours(0, 0, 0, 0);
+    }
+    if (startDate) reportQuery.createdAt = { $gte: startDate };
+
+    const reports = await Report.find(reportQuery)
+      .select('filename status errorCount errorSummary timeSaved qualityAssessment createdAt errors')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const summary = {
+      totalReports: reports.length,
+      analyzedReports: 0,
+      pendingReports: 0,
+      failedReports: 0,
+      totalErrors: 0,
+      averageErrorsPerReport: 0,
+      totalTimeSaved: 0,
+    };
+
+    const errorBreakdown = { placeholder: 0, consistency: 0, compliance: 0, formatting: 0, missing_data: 0 };
+    const qualityBreakdown = { good: 0, bad: 0, uncertain: 0 };
+    const errorTypesByReport = { placeholder: 0, consistency: 0, compliance: 0, formatting: 0, missing_data: 0 };
+    const checklistFailureCounts = new Map();
+
+    reports.forEach((report) => {
+      summary.totalErrors += report.errorCount || 0;
+      summary.totalTimeSaved += report.timeSaved || 0;
+
+      if (report.status === 'analyzed') summary.analyzedReports += 1;
+      else if (report.status === 'failed') summary.failedReports += 1;
+      else if (['pending', 'processing'].includes(report.status)) summary.pendingReports += 1;
+
+      errorBreakdown.placeholder += report.errorSummary?.placeholder || 0;
+      errorBreakdown.consistency += report.errorSummary?.consistency || 0;
+      errorBreakdown.compliance += report.errorSummary?.compliance || 0;
+      errorBreakdown.formatting += report.errorSummary?.formatting || 0;
+      errorBreakdown.missing_data += report.errorSummary?.missing_data || 0;
+
+      if ((report.errorSummary?.placeholder || 0) > 0) errorTypesByReport.placeholder += 1;
+      if ((report.errorSummary?.consistency || 0) > 0) errorTypesByReport.consistency += 1;
+      if ((report.errorSummary?.compliance || 0) > 0) errorTypesByReport.compliance += 1;
+      if ((report.errorSummary?.formatting || 0) > 0) errorTypesByReport.formatting += 1;
+      if ((report.errorSummary?.missing_data || 0) > 0) errorTypesByReport.missing_data += 1;
+
+      const qualityLabel = report.qualityAssessment?.label;
+      if (qualityLabel && qualityBreakdown[qualityLabel] !== undefined) qualityBreakdown[qualityLabel] += 1;
+
+      (report.errors || []).forEach((error) => {
+        if (!error?.message) return;
+        checklistFailureCounts.set(error.message, (checklistFailureCounts.get(error.message) || 0) + 1);
+      });
+    });
+
+    if (summary.analyzedReports > 0) {
+      summary.averageErrorsPerReport = Number((summary.totalErrors / summary.analyzedReports).toFixed(2));
+    }
+
+    const mostCommonErrorTypes = Object.entries(errorBreakdown)
+      .map(([type, count]) => ({ type, count, reportsAffected: errorTypesByReport[type] || 0 }))
+      .sort((a, b) => b.count !== a.count ? b.count - a.count : b.reportsAffected - a.reportsAffected);
+
+    const checklistFailureBreakdown = Array.from(checklistFailureCounts.entries())
+      .map(([message, count]) => ({ message, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    const qualityScoreTrend = reports
+      .filter((r) => r.status === 'analyzed')
+      .map((r) => ({
+        _id: r._id,
+        filename: r.filename,
+        createdAt: r.createdAt,
+        qualityLabel: r.qualityAssessment?.label || null,
+        qualityScore: Number(((r.qualityAssessment?.goodScore || 0) * 100).toFixed(1)),
+      }))
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+      .slice(-10);
+
+    const recentReports = reports.slice(0, 5).map((r) => ({
+      _id: r._id,
+      filename: r.filename,
+      createdAt: r.createdAt,
+      status: r.status,
+      errorCount: r.errorCount || 0,
+      timeSaved: r.timeSaved || 0,
+      qualityLabel: r.qualityAssessment?.label || null,
+      errorSummary: {
+        placeholder: r.errorSummary?.placeholder || 0,
+        consistency: r.errorSummary?.consistency || 0,
+        compliance: r.errorSummary?.compliance || 0,
+        formatting: r.errorSummary?.formatting || 0,
+        missing_data: r.errorSummary?.missing_data || 0,
+      },
+    }));
+
+    res.json({
+      user: { name: targetUser.name, email: targetUser.email },
+      scope,
+      summary,
+      errorBreakdown,
+      qualityBreakdown,
+      mostCommonErrorTypes,
+      checklistFailureBreakdown,
+      qualityScoreTrend,
+      recentReports,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
