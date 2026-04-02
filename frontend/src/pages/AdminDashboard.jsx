@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AlertCircle,
   AlertTriangle,
@@ -8,6 +9,8 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Download,
+  Eye,
   FileText,
   Filter,
   KeyRound,
@@ -701,6 +704,7 @@ const AdminDashboard = () => {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Errors</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Result</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -735,6 +739,29 @@ const AdminDashboard = () => {
                         ) : <span className="text-sm text-gray-400">Pending</span>}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{formatDate(report.createdAt)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                        <Link
+                          to={`/report/${report._id}`}
+                          className="text-indigo-600 hover:text-indigo-900 mr-3"
+                          title="View Report"
+                        >
+                          <Eye className="w-4 h-4 inline" />
+                        </Link>
+                        <button
+                          onClick={() => handleReportDownload(report._id, report.filename)}
+                          className="text-gray-600 hover:text-gray-900 mr-3"
+                          title="Download Summary"
+                        >
+                          <Download className="w-4 h-4 inline" />
+                        </button>
+                        <button
+                          onClick={() => handleReportDelete(report._id)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Delete Report"
+                        >
+                          <Trash2 className="w-4 h-4 inline" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -986,6 +1013,43 @@ const AdminDashboard = () => {
       setShowTeamAnalytics(false);
     } finally {
       setTeamStatsLoading(false);
+    }
+  };
+
+  const handleReportDownload = async (reportId, filename) => {
+    try {
+      const response = await api.get(`/reports/${reportId}/download`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      const sanitised = filename.replace(/\.pdf$/i, '');
+      link.setAttribute('download', `QC_Report_${sanitised}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to download report');
+    }
+  };
+
+  const handleReportDelete = async (reportId) => {
+    if (!window.confirm('Are you sure you want to delete this report?')) return;
+    try {
+      await api.delete(`/reports/${reportId}`);
+      // Re-fetch team stats if viewing team analytics
+      if (showTeamAnalytics) fetchTeamStats();
+      // Re-fetch user profile analytics if viewing individual stats
+      if (filterUser) {
+        const res = await api.get(`/admin/users/${filterUser}/profile-analytics`);
+        setUserProfileAnalytics(res.data);
+      }
+      if (teamFilterUser) {
+        const res = await api.get(`/admin/users/${teamFilterUser}/profile-analytics`);
+        setTeamUserProfileAnalytics(res.data);
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete report');
     }
   };
 
@@ -2548,6 +2612,27 @@ const AdminDashboard = () => {
                                   {!r.result && (
                                     <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-500">{r.status}</span>
                                   )}
+                                  <Link
+                                    to={`/report/${r._id}`}
+                                    className="text-indigo-600 hover:text-indigo-900"
+                                    title="View Report"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </Link>
+                                  <button
+                                    onClick={() => handleReportDownload(r._id, r.filename)}
+                                    className="text-gray-600 hover:text-gray-900"
+                                    title="Download Summary"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleReportDelete(r._id)}
+                                    className="text-red-600 hover:text-red-900"
+                                    title="Delete Report"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 </div>
                               </div>
                             ))}
