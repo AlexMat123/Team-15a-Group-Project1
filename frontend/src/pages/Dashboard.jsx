@@ -212,13 +212,13 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
       <Header />
       
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">QC Report Analyzer</h1>
-          <p className="text-gray-600">Upload a PDF report to detect errors automatically</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">QC Report Analyzer</h1>
+          <p className="text-gray-600 dark:text-gray-300">Upload a PDF report to detect errors automatically</p>
         </div>
 
         {error && (
@@ -236,7 +236,7 @@ const Dashboard = () => {
         )}
 
         <div
-          className={`bg-white rounded-xl shadow-sm border-2 border-dashed p-12 transition-colors ${
+          className={`bg-white dark:bg-gray-900 rounded-xl shadow-sm border-2 border-dashed p-12 transition-colors ${
             dragActive
               ? 'border-indigo-500 bg-indigo-50'
               : 'border-gray-300 hover:border-gray-400'
@@ -250,7 +250,7 @@ const Dashboard = () => {
             {uploading ? (
               <>
                 <Loader2 className="w-12 h-12 text-indigo-600 mb-4 animate-spin" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                   Uploading...
                 </h3>
                 <div className="w-64 bg-gray-200 rounded-full h-2.5 mb-2">
@@ -259,15 +259,15 @@ const Dashboard = () => {
                     style={{ width: `${uploadProgress}%` }}
                   ></div>
                 </div>
-                <p className="text-sm text-gray-500">{uploadProgress}%</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{uploadProgress}%</p>
               </>
             ) : (
               <>
                 <Upload className={`w-12 h-12 mb-4 ${dragActive ? 'text-indigo-600' : 'text-gray-400'}`} />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100mb-2">
                   {dragActive ? 'Drop your file here' : 'Upload QC Report'}
                 </h3>
-                <p className="text-gray-500 mb-4">
+                <p className="text-gray-500 dark:text-gray-400 mb-4">
                   Drag and drop a PDF file, or click to browse
                 </p>
                 <input
@@ -292,55 +292,55 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="mt-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Your Reports</h2>
+        <div className="mt-8 ">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Your Reports</h2>
           
           {loading ? (
-            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-8 text-center">
               <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-2" />
-              <p className="text-gray-500">Loading reports...</p>
+              <p className="text-gray-500 dark:text-gray-400">Loading reports...</p>
             </div>
           ) : reports.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-8 text-center">
               <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No reports yet. Upload your first PDF to get started.</p>
+              <p className="text-gray-500 dark:text-gray-400">No reports yet. Upload your first PDF to get started.</p>
             </div>
           ) : (
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Report
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Errors
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Result
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Date
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200">
                   {reports.map((report) => (
                     <tr key={report._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <FileText className="w-8 h-8 text-red-500 mr-3" />
                           <div>
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                               {report.filename}
                             </div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
                               {formatFileSize(report.fileSize)}
                             </div>
                           </div>
@@ -361,7 +361,7 @@ const Dashboard = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getQualityBadge(report)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                         {formatDate(report.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -373,7 +373,7 @@ const Dashboard = () => {
                         </Link>
                         <button
                           onClick={() => handleDownload(report._id, report.filename)}
-                          className="text-gray-600 hover:text-gray-900 mr-4"
+                          className="text-gray-600 hover:text-gray-900 dark:text-gray-100 mr-4"
                           title="Download Report"
                         >
                           <Download className="w-4 h-4 inline" />
