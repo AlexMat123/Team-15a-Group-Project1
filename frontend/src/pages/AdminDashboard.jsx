@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
+  ArrowDown,
   BarChart3,
   CheckCircle,
   ChevronDown,
@@ -2266,6 +2267,21 @@ const AdminDashboard = () => {
                     </button>
                   </div>
 
+                                    {/* Jump to individual stats button */}
+                  {teamFilterUser && !teamUserProfileLoading && teamUserProfileAnalytics && (
+                    <button
+                      onClick={() => document.getElementById('team-user-profile-stats')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      className="flex items-center gap-2 mx-auto mt-4 mb-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium transition-colors border border-indigo-200"
+                    >
+                      <span>View Individual Statistics for {(() => {
+                        const currentTeam = teams.find(t => t._id === manageTeamId);
+                        const member = currentTeam?.members?.find(m => (typeof m === 'object' ? m._id : m) === teamFilterUser);
+                        return typeof member === 'object' ? member.name : 'selected member';
+                      })()}</span>
+                      <ArrowDown className="w-4 h-4 animate-bounce" />
+                    </button>
+                  )}
+
                   {/* Team Analytics Filters */}
                   <div className="bg-gray-50 rounded-lg p-4 mb-5">
                     <div className="flex items-center gap-2 mb-3">
@@ -2541,7 +2557,7 @@ const AdminDashboard = () => {
 
                       {/* Individual Member Profile Stats (shown when filtering by a specific member) */}
                       {teamFilterUser && (
-                        <div className="border border-gray-200 rounded-xl p-4 mt-4">
+                        <div id="team-user-profile-stats" className="border border-gray-200 rounded-xl p-4 mt-4">
                           {renderUserProfileStats(teamUserProfileAnalytics, teamUserProfileLoading)}
                         </div>
                       )}
