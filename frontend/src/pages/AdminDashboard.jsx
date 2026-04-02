@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
+  AlertCircle,
   AlertTriangle,
+  BarChart3,
+  CheckCircle,
   ChevronDown,
   ChevronRight,
   Clock,
   FileText,
   Filter,
   KeyRound,
+  Loader2,
   Search,
   Trash2,
   Users,
@@ -15,7 +19,11 @@ import {
 import {
   Bar,
   BarChart,
+  CartesianGrid,
   Cell,
+  Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -142,6 +150,12 @@ const AdminDashboard = () => {
   const [teamFilterRange, setTeamFilterRange] = useState('all');
   const [teamFilterUser, setTeamFilterUser] = useState('');
   const [teamFilterResult, setTeamFilterResult] = useState('');
+
+  // User profile analytics (shown when filtering by a specific user)
+  const [userProfileAnalytics, setUserProfileAnalytics] = useState(null);
+  const [userProfileLoading, setUserProfileLoading] = useState(false);
+  const [teamUserProfileAnalytics, setTeamUserProfileAnalytics] = useState(null);
+  const [teamUserProfileLoading, setTeamUserProfileLoading] = useState(false);
 
   // --- Training state ---
   const [trainingExamples, setTrainingExamples] = useState([]);
@@ -295,6 +309,46 @@ const AdminDashboard = () => {
     fetchDashboardData(filterRange, filterTeam, filterUser, filterResult);
   }, [filterRange, filterTeam, filterUser, filterResult]);
 
+  // Fetch user profile analytics when a specific user is selected in the overview filter
+  useEffect(() => {
+    if (!filterUser) {
+      setUserProfileAnalytics(null);
+      return;
+    }
+    const fetchUserProfile = async () => {
+      setUserProfileLoading(true);
+      try {
+        const res = await api.get(`/admin/users/${filterUser}/profile-analytics`);
+        setUserProfileAnalytics(res.data);
+      } catch {
+        setUserProfileAnalytics(null);
+      } finally {
+        setUserProfileLoading(false);
+      }
+    };
+    fetchUserProfile();
+  }, [filterUser]);
+
+  // Fetch user profile analytics when a specific member is selected in the team analytics filter
+  useEffect(() => {
+    if (!teamFilterUser) {
+      setTeamUserProfileAnalytics(null);
+      return;
+    }
+    const fetchTeamUserProfile = async () => {
+      setTeamUserProfileLoading(true);
+      try {
+        const res = await api.get(`/admin/users/${teamFilterUser}/profile-analytics`);
+        setTeamUserProfileAnalytics(res.data);
+      } catch {
+        setTeamUserProfileAnalytics(null);
+      } finally {
+        setTeamUserProfileLoading(false);
+      }
+    };
+    fetchTeamUserProfile();
+  }, [teamFilterUser]);
+
   const fetchTrainingData = async () => {
     setLoadingTraining(true);
     try {
@@ -432,6 +486,264 @@ const AdminDashboard = () => {
     { label: 'AI Review Time', value: `${dashboardStats.aiTime}h`, bg: 'bg-green-100', text: 'text-green-600' },
     { label: 'Time Saved', value: `${dashboardStats.timeSavedPercent}%`, bg: 'bg-purple-100', text: 'text-purple-600' },
   ];
+
+  const errorSummaryCards = [
+    { key: 'placeholder', label: 'Placeholder', valueClass: 'text-orange-600', cardClass: 'bg-orange-50' },
+    { key: 'consistency', label: 'Consistency', valueClass: 'text-blue-600', cardClass: 'bg-blue-50' },
+    { key: 'compliance', label: 'Compliance', valueClass: 'text-red-600', cardClass: 'bg-red-50' },
+    { key: 'formatting', label: 'Formatting', valueClass: 'text-purple-600', cardClass: 'bg-purple-50' },
+    { key: 'missing_data', label: 'Missing Data', valueClass: 'text-green-600', cardClass: 'bg-green-50' },
+  ];
+
+  const errorTypeLabelMap = {
+    placeholder: 'Placeholder', consistency: 'Consistency', compliance: 'Compliance',
+    formatting: 'Formatting', missing_data: 'Missing Data',
+  };
+  const errorTypeColors = ['#F97316', '#2563EB', '#DC2626', '#9333EA', '#16A34A'];
+
+  const renderUserProfileStats = (analytics, loading) => {
+    if (loading) {
+      return (
+        <div className="py-8 flex items-center justify-center text-gray-500">
+          <Loader2 className="w-5 h-5 animate-spin mr-2 text-indigo-600" />
+          Loading user analytics...
+        </div>
+      );
+    }
+    if (!analytics) return null;
+
+    const { summary, errorBreakdown, qualityBreakdown, mostCommonErrorTypes, checklistFailureBreakdown, qualityScoreTrend } = analytics;
+
+    const averageErrorTypeBreakdown = errorSummaryCards.map((card) => {
+      const totalForType = errorBreakdown?.[card.key] ?? 0;
+      const analyzed = summary?.analyzedReports ?? 0;
+      return { ...card, average: analyzed > 0 ? Number((totalForType / analyzed).toFixed(2)) : 0 };
+    });
+
+    const commonErrorTypeChartData = (mostCommonErrorTypes || []).map((item, index) => ({
+      name: errorTypeLabelMap[item.type] || item.type,
+      errors: item.count,
+      fill: errorTypeColors[index % errorTypeColors.length],
+    }));
+
+    const checklistChartData = (checklistFailureBreakdown || []).map((item) => ({
+      shortLabel: item.message.length > 28 ? `${item.message.slice(0, 28)}...` : item.message,
+      fullLabel: item.message,
+      count: item.count,
+    }));
+
+    const qualityScoreMaxValue = (qualityScoreTrend || []).reduce((max, r) => Math.max(max, r.qualityScore || 0), 0);
+    const qualityScoreChartData = (qualityScoreTrend || []).map((r) => ({
+      label: r.filename.length > 18 ? `${r.filename.slice(0, 18)}...` : r.filename,
+      fullLabel: r.filename,
+      score: r.qualityScore,
+      date: formatDate(r.createdAt),
+    }));
+
+    const summaryCards = [
+      { label: 'Total Reports', value: summary?.totalReports ?? 0, icon: FileText },
+      { label: 'Analyzed Reports', value: summary?.analyzedReports ?? 0, icon: CheckCircle },
+      { label: 'Total Errors', value: summary?.totalErrors ?? 0, icon: AlertCircle },
+      { label: 'Average Errors', value: summary?.averageErrorsPerReport ?? 0, icon: BarChart3 },
+      { label: 'Time Saved', value: `${summary?.totalTimeSaved ?? 0} min`, icon: Clock },
+    ];
+
+    return (
+      <div className="mt-4 space-y-6">
+        {/* User info header */}
+        {analytics.user && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+            <p className="text-sm font-semibold text-indigo-800">
+              Individual Statistics for {analytics.user.name}
+            </p>
+            <p className="text-xs text-indigo-600">{analytics.user.email}</p>
+          </div>
+        )}
+
+        {/* Summary cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+          {summaryCards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <div key={card.label} className="rounded-xl bg-gray-50 p-4 border border-gray-100">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-500">{card.label}</p>
+                  <Icon className="w-5 h-5 text-indigo-600" />
+                </div>
+                <p className="text-2xl font-bold text-gray-900 mt-3">{card.value}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Passed / Failed */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-xl border border-gray-200 p-4">
+            <p className="text-sm text-gray-500">Failed Reports</p>
+            <p className="text-2xl font-semibold text-gray-900 mt-2">{summary?.failedReports ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 p-4">
+            <p className="text-sm text-gray-500">Passed Reviews</p>
+            <p className="text-2xl font-semibold text-gray-900 mt-2">{qualityBreakdown?.good ?? 0}</p>
+          </div>
+        </div>
+
+        {/* Average Errors Per Report */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Average Errors Per Report</h3>
+          <p className="text-sm text-gray-500 mt-1">The average number of each error type found per analyzed report.</p>
+          <div className="rounded-xl border border-gray-200 p-5 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+              {averageErrorTypeBreakdown.map((item) => (
+                <div key={item.key} className={`rounded-xl px-4 py-4 text-center border border-transparent ${item.cardClass}`}>
+                  <p className={`text-2xl font-bold ${item.valueClass}`}>{item.average}</p>
+                  <p className="text-sm text-gray-700 mt-1">{item.label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div className="rounded-xl bg-white border border-gray-200 p-4">
+                <p className="text-sm text-gray-500">Analyzed Reports</p>
+                <p className="text-2xl font-semibold text-gray-900 mt-2">{summary?.analyzedReports ?? 0}</p>
+              </div>
+              <div className="rounded-xl bg-white border border-gray-200 p-4">
+                <p className="text-sm text-gray-500">Overall Average Errors</p>
+                <p className="text-2xl font-semibold text-gray-900 mt-2">{summary?.averageErrorsPerReport ?? 0}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quality Score Trend */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Quality Score Trend</h3>
+          <p className="text-sm text-gray-500 mt-1">Per-report quality score over time.</p>
+          <div className="rounded-xl border border-gray-200 p-5 mt-4">
+            {qualityScoreTrend?.length ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={qualityScoreChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis domain={[0, Math.max(qualityScoreMaxValue, 100)]} tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(value) => [`${value}`, 'Quality Score']}
+                    labelFormatter={(label, payload) => {
+                      const point = payload?.[0]?.payload;
+                      return point ? `${point.fullLabel} - ${point.date}` : label;
+                    }}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="score" name="Quality Score" stroke="#10B981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-gray-500">No analyzed reports with quality scores yet.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Most Common Error Types */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Most Common Error Types</h3>
+          <p className="text-sm text-gray-500 mt-1">Ranked by frequency.</p>
+          <div className="rounded-xl border border-gray-200 p-5 mt-4">
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={commonErrorTypeChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value) => [`${value}`, 'Errors']} />
+                <Bar dataKey="errors" name="Errors" radius={[6, 6, 0, 0]}>
+                  {commonErrorTypeChartData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Checklist Failures */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Top Recurring Checklist Failures</h3>
+          <p className="text-sm text-gray-500 mt-1">The most frequently repeated issue messages.</p>
+          <div className="rounded-xl border border-gray-200 p-5 mt-4">
+            {checklistFailureBreakdown?.length ? (
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={checklistChartData} layout="vertical" margin={{ top: 10, right: 30, left: 20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <XAxis type="number" tick={{ fontSize: 12 }} />
+                  <YAxis dataKey="shortLabel" type="category" tick={{ fontSize: 12 }} width={55} />
+                  <Tooltip
+                    formatter={(value) => [`${value}`, 'Occurrences']}
+                    labelFormatter={(label, payload) => payload?.[0]?.payload?.fullLabel || label}
+                  />
+                  <Bar dataKey="count" fill="#6366F1" radius={[0, 6, 6, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-gray-500">No recurring checklist failures found yet.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Recent Reports */}
+        {analytics.recentReports?.length > 0 && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Recent Reports</h3>
+            <div className="overflow-x-auto border border-gray-200 rounded-xl">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Report</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Errors</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Result</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {analytics.recentReports.map((report) => (
+                    <tr key={report._id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{report.filename}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          report.status === 'analyzed' ? 'bg-green-100 text-green-800' :
+                          report.status === 'failed' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {report.status ? report.status.charAt(0).toUpperCase() + report.status.slice(1) : 'Unknown'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm">
+                        {report.status === 'analyzed' ? (
+                          <span className={`font-medium ${report.errorCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {report.errorCount} {report.errorCount === 1 ? 'error' : 'errors'}
+                          </span>
+                        ) : <span className="text-gray-400">-</span>}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {report.status === 'analyzed' ? (
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            report.qualityLabel === 'good' ? 'bg-green-100 text-green-800' :
+                            report.qualityLabel === 'bad' ? 'bg-red-100 text-red-800' :
+                            'bg-amber-100 text-amber-800'
+                          }`}>
+                            {report.qualityLabel === 'good' ? 'Passed' : report.qualityLabel === 'bad' ? 'Failed' : 'Uncertain'}
+                          </span>
+                        ) : <span className="text-sm text-gray-400">Pending</span>}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{formatDate(report.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const filteredUsers = users.filter((entry) => {
     const query = searchTerm.trim().toLowerCase();
@@ -850,85 +1162,114 @@ const AdminDashboard = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {stats.map((stat) => (
-                <div key={stat.label} className="bg-white rounded-xl shadow-sm p-6">
-                  <div className="flex items-center">
-                    <div className={`${stat.color} p-3 rounded-lg`}>
-                      <stat.icon className="w-6 h-6 text-white" />
+            {filterUser ? (
+              <>
+                {/* Quality breakdown - passed/failed/uncertain only */}
+                {dashboardStats.qualityBreakdown && (
+                  <div className="grid grid-cols-3 gap-4 mb-8">
+                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
+                      <p className="text-2xl font-bold text-green-600">{dashboardStats.qualityBreakdown.passed}</p>
+                      <p className="text-sm text-gray-500">Passed</p>
                     </div>
-                    <div className="ml-4">
-                      <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                      <p className="text-sm text-gray-500">{stat.label}</p>
+                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-red-500">
+                      <p className="text-2xl font-bold text-red-600">{dashboardStats.qualityBreakdown.failed}</p>
+                      <p className="text-sm text-gray-500">Failed</p>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-amber-500">
+                      <p className="text-2xl font-bold text-amber-600">{dashboardStats.qualityBreakdown.uncertain}</p>
+                      <p className="text-sm text-gray-500">Uncertain</p>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                )}
 
-            {/* Quality breakdown */}
-            {dashboardStats.qualityBreakdown && (
-              <div className="grid grid-cols-3 gap-4 mb-8">
-                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
-                  <p className="text-2xl font-bold text-green-600">{dashboardStats.qualityBreakdown.passed}</p>
-                  <p className="text-sm text-gray-500">Passed</p>
+                {/* Individual User Profile Stats */}
+                <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+                  {renderUserProfileStats(userProfileAnalytics, userProfileLoading)}
                 </div>
-                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-red-500">
-                  <p className="text-2xl font-bold text-red-600">{dashboardStats.qualityBreakdown.failed}</p>
-                  <p className="text-sm text-gray-500">Failed</p>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-amber-500">
-                  <p className="text-2xl font-bold text-amber-600">{dashboardStats.qualityBreakdown.uncertain}</p>
-                  <p className="text-sm text-gray-500">Uncertain</p>
-                </div>
-              </div>
-            )}
-
-            {loadingReports ? (
-              <div className="bg-white rounded-xl shadow-sm p-6 mb-8 text-sm text-gray-500">
-                Loading analytics...
-              </div>
+              </>
             ) : (
               <>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                  <div className="bg-white rounded-xl shadow-sm p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Most Common Errors</h2>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={barData}>
-                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="errors" fill="#6366f1" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <div className="bg-white rounded-xl shadow-sm p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Error Type Distribution</h2>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <PieChart>
-                        <Pie data={dashboardStats.errorBreakdown} dataKey="value" nameKey="name" outerRadius={80}>
-                          {dashboardStats.errorBreakdown.map((_, index) => (
-                            <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Time Savings Analysis</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {timeSavingsCards.map((item) => (
-                      <div key={item.label} className={`${item.bg} rounded-lg p-6 text-center`}>
-                        <p className={`text-3xl font-bold ${item.text}`}>{item.value}</p>
-                        <p className="text-sm text-gray-500 mt-1">{item.label}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  {stats.map((stat) => (
+                    <div key={stat.label} className="bg-white rounded-xl shadow-sm p-6">
+                      <div className="flex items-center">
+                        <div className={`${stat.color} p-3 rounded-lg`}>
+                          <stat.icon className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                          <p className="text-sm text-gray-500">{stat.label}</p>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
+
+                {/* Quality breakdown */}
+                {dashboardStats.qualityBreakdown && (
+                  <div className="grid grid-cols-3 gap-4 mb-8">
+                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
+                      <p className="text-2xl font-bold text-green-600">{dashboardStats.qualityBreakdown.passed}</p>
+                      <p className="text-sm text-gray-500">Passed</p>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-red-500">
+                      <p className="text-2xl font-bold text-red-600">{dashboardStats.qualityBreakdown.failed}</p>
+                      <p className="text-sm text-gray-500">Failed</p>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-amber-500">
+                      <p className="text-2xl font-bold text-amber-600">{dashboardStats.qualityBreakdown.uncertain}</p>
+                      <p className="text-sm text-gray-500">Uncertain</p>
+                    </div>
+                  </div>
+                )}
+
+                {loadingReports ? (
+                  <div className="bg-white rounded-xl shadow-sm p-6 mb-8 text-sm text-gray-500">
+                    Loading analytics...
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                      <div className="bg-white rounded-xl shadow-sm p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Most Common Errors</h2>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={barData}>
+                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                            <YAxis />
+                            <Tooltip />
+                            <Bar dataKey="errors" fill="#6366f1" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      <div className="bg-white rounded-xl shadow-sm p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Error Type Distribution</h2>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <PieChart>
+                            <Pie data={dashboardStats.errorBreakdown} dataKey="value" nameKey="name" outerRadius={80}>
+                              {dashboardStats.errorBreakdown.map((_, index) => (
+                                <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Time Savings Analysis</h2>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {timeSavingsCards.map((item) => (
+                          <div key={item.label} className={`${item.bg} rounded-lg p-6 text-center`}>
+                            <p className={`text-3xl font-bold ${item.text}`}>{item.value}</p>
+                            <p className="text-sm text-gray-500 mt-1">{item.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </>
             )}
 
@@ -2198,7 +2539,14 @@ const AdminDashboard = () => {
                         </div>
                       )}
 
-                      {teamStats.totalReports === 0 && (
+                      {/* Individual Member Profile Stats (shown when filtering by a specific member) */}
+                      {teamFilterUser && (
+                        <div className="border border-gray-200 rounded-xl p-4 mt-4">
+                          {renderUserProfileStats(teamUserProfileAnalytics, teamUserProfileLoading)}
+                        </div>
+                      )}
+
+                      {teamStats.totalReports === 0 && !teamFilterUser && (
                         <div className="bg-gray-50 rounded-xl p-8 text-center">
                           <p className="text-gray-400 text-sm">No reports have been submitted by members of this team yet.</p>
                         </div>
