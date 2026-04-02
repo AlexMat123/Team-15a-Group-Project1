@@ -68,18 +68,18 @@ const getStatusOutlineClass = (status) => {
   const normalizedStatus = String(status || '').toLowerCase();
 
   if (normalizedStatus.includes('pending')) {
-    return 'border-orange-400 text-orange-700';
+    return 'border-orange-400 text-orange-700 dark:text-orange-300';
   }
 
   if (normalizedStatus === 'active') {
-    return 'border-green-400 text-green-700';
+    return 'border-green-400 text-green-700 dark:text-green-300';
   }
 
   if (normalizedStatus.includes('inactive')) {
-    return 'border-red-400 text-red-700';
+    return 'border-red-400 text-red-700 dark:text-red-300';
   }
 
-  return 'border-gray-300 text-gray-700';
+  return 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300';
 };
 
 const AdminDashboard = () => {
@@ -1109,14 +1109,14 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
       <Header />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-            <p className="text-gray-600">Manage users and monitor system analytics</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
+            <p className="text-gray-600 dark:text-gray-300 dark:text-gray-300">Manage users and monitor system analytics</p>
           </div>
 
           {activeTab === 'users' && (
@@ -1130,7 +1130,7 @@ const AdminDashboard = () => {
           )}
         </div>
 
-        <div className="mb-8 border-b border-gray-200">
+        <div className="mb-8 border-b border-gray-200 dark:border-gray-700">
           <div className="flex gap-8 overflow-x-auto">
             {tabs.map((tab) => (
               <button
@@ -1140,7 +1140,7 @@ const AdminDashboard = () => {
                 className={`border-b-2 pb-4 text-sm font-semibold transition ${
                   activeTab === tab.id
                     ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}
               >
                 {tab.label}
@@ -1151,8 +1151,8 @@ const AdminDashboard = () => {
 
         {activeTab === 'overview' && (
           <>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-              <p className="text-green-700 text-sm">
+            <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-4 mb-6">
+              <p className="text-green-700 dark:text-green-300 text-sm">
                 <span className="font-semibold">Local AI Processing - Client Data Protected</span>
                 <br />
                 All AI processing is performed locally on your servers. Your confidential client
@@ -1160,225 +1160,75 @@ const AdminDashboard = () => {
               </p>
             </div>
 
-            {/* Filters */}
-            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <Filter className="w-4 h-4 text-indigo-600" />
-                <h3 className="text-sm font-semibold text-gray-700">Filter Analytics</h3>
-                {(filterRange !== 'all' || filterTeam || filterUser || filterResult) && (
-                  <button
-                    onClick={() => { setFilterRange('all'); setFilterTeam(''); setFilterUser(''); setFilterResult(''); }}
-                    className="ml-auto text-xs text-indigo-600 hover:text-indigo-800 font-medium"
-                  >
-                    Clear all filters
-                  </button>
-                )}
-              </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Date Range</label>
-                  <select
-                    value={filterRange}
-                    onChange={(e) => setFilterRange(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="all">All Time</option>
-                    <option value="7">Last 7 Days</option>
-                    <option value="30">Last 30 Days</option>
-                    <option value="90">Last 90 Days</option>
-                  </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {stats.map((stat) => (
+                <div key={stat.label} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6">
+                  <div className="flex items-center">
+                    <div className={`${stat.color} p-3 rounded-lg`}>
+                      <stat.icon className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
+                      <p className="text-sm text-gray-500">{stat.label}</p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Team</label>
-                  <select
-                    value={filterTeam}
-                    onChange={(e) => { setFilterTeam(e.target.value); setFilterUser(''); }}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="">All Teams</option>
-                    {teams.map(t => (
-                      <option key={t._id} value={t._id}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">User</label>
-                  <select
-                    value={filterUser}
-                    onChange={(e) => setFilterUser(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="">All Users</option>
-                    {(filterTeam
-                      ? users.filter(u => {
-                          const selectedTeam = teams.find(t => t._id === filterTeam);
-                          return selectedTeam?.members?.some(m => (typeof m === 'object' ? m._id : m) === u._id);
-                        })
-                      : users
-                    ).map(u => (
-                      <option key={u._id} value={u._id}>{u.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Result</label>
-                  <select
-                    value={filterResult}
-                    onChange={(e) => setFilterResult(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="">All Results</option>
-                    <option value="good">Passed</option>
-                    <option value="bad">Failed</option>
-                    <option value="uncertain">Uncertain</option>
-                  </select>
-                </div>
-              </div>
+              ))}
             </div>
 
-            {/* Active filter summary */}
-            {(filterRange !== 'all' || filterTeam || filterUser || filterResult) && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2.5 mb-4 flex items-center gap-2 flex-wrap text-sm">
-                <span className="text-indigo-700 font-medium">Showing:</span>
-                {filterRange !== 'all' && (
-                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                    Last {filterRange} days
-                  </span>
-                )}
-                {filterTeam && (
-                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                    Team: {teams.find(t => t._id === filterTeam)?.name || 'Unknown'}
-                  </span>
-                )}
-                {filterUser && (
-                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                    User: {users.find(u => u._id === filterUser)?.name || 'Unknown'}
-                  </span>
-                )}
-                {filterResult && (
-                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                    Result: {filterResult === 'good' ? 'Passed' : filterResult === 'bad' ? 'Failed' : 'Uncertain'}
-                  </span>
-                )}
+            {loadingReports ? (
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6 mb-8 text-sm text-gray-500">
+                Loading analytics...
               </div>
-            )}
-
-            {filterUser ? (
-              <>
-                {/* Quality breakdown - passed/failed/uncertain only */}
-                {dashboardStats.qualityBreakdown && (
-                  <div className="grid grid-cols-3 gap-4 mb-8">
-                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
-                      <p className="text-2xl font-bold text-green-600">{dashboardStats.qualityBreakdown.passed}</p>
-                      <p className="text-sm text-gray-500">Passed</p>
-                    </div>
-                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-red-500">
-                      <p className="text-2xl font-bold text-red-600">{dashboardStats.qualityBreakdown.failed}</p>
-                      <p className="text-sm text-gray-500">Failed</p>
-                    </div>
-                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-amber-500">
-                      <p className="text-2xl font-bold text-amber-600">{dashboardStats.qualityBreakdown.uncertain}</p>
-                      <p className="text-sm text-gray-500">Uncertain</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Individual User Profile Stats */}
-                <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
-                  {renderUserProfileStats(userProfileAnalytics, userProfileLoading)}
-                </div>
-              </>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  {stats.map((stat) => (
-                    <div key={stat.label} className="bg-white rounded-xl shadow-sm p-6">
-                      <div className="flex items-center">
-                        <div className={`${stat.color} p-3 rounded-lg`}>
-                          <stat.icon className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="ml-4">
-                          <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                          <p className="text-sm text-gray-500">{stat.label}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                  <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Most Common Errors</h2>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={barData}>
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="errors" fill="#6366f1" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Error Type Distribution</h2>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie data={dashboardStats.errorBreakdown} dataKey="value" nameKey="name" outerRadius={80}>
+                          {dashboardStats.errorBreakdown.map((_, index) => (
+                            <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
 
-                {/* Quality breakdown */}
-                {dashboardStats.qualityBreakdown && (
-                  <div className="grid grid-cols-3 gap-4 mb-8">
-                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
-                      <p className="text-2xl font-bold text-green-600">{dashboardStats.qualityBreakdown.passed}</p>
-                      <p className="text-sm text-gray-500">Passed</p>
-                    </div>
-                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-red-500">
-                      <p className="text-2xl font-bold text-red-600">{dashboardStats.qualityBreakdown.failed}</p>
-                      <p className="text-sm text-gray-500">Failed</p>
-                    </div>
-                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-amber-500">
-                      <p className="text-2xl font-bold text-amber-600">{dashboardStats.qualityBreakdown.uncertain}</p>
-                      <p className="text-sm text-gray-500">Uncertain</p>
-                    </div>
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6 mb-8">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Time Savings Analysis</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {timeSavingsCards.map((item) => (
+                      <div key={item.label} className={`${item.bg} rounded-lg p-6 text-center`}>
+                        <p className={`text-3xl font-bold ${item.text}`}>{item.value}</p>
+                        <p className="text-sm text-gray-500 mt-1">{item.label}</p>
+                      </div>
+                    ))}
                   </div>
-                )}
-
-                {loadingReports ? (
-                  <div className="bg-white rounded-xl shadow-sm p-6 mb-8 text-sm text-gray-500">
-                    Loading analytics...
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                      <div className="bg-white rounded-xl shadow-sm p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Most Common Errors</h2>
-                        <ResponsiveContainer width="100%" height={200}>
-                          <BarChart data={barData}>
-                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                            <YAxis />
-                            <Tooltip />
-                            <Bar dataKey="errors" fill="#6366f1" />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-
-                      <div className="bg-white rounded-xl shadow-sm p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Error Type Distribution</h2>
-                        <ResponsiveContainer width="100%" height={200}>
-                          <PieChart>
-                            <Pie data={dashboardStats.errorBreakdown} dataKey="value" nameKey="name" outerRadius={80}>
-                              {dashboardStats.errorBreakdown.map((_, index) => (
-                                <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                              ))}
-                            </Pie>
-                            <Tooltip />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
-                      <h2 className="text-lg font-semibold text-gray-900 mb-4">Time Savings Analysis</h2>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {timeSavingsCards.map((item) => (
-                          <div key={item.label} className={`${item.bg} rounded-lg p-6 text-center`}>
-                            <p className={`text-3xl font-bold ${item.text}`}>{item.value}</p>
-                            <p className="text-sm text-gray-500 mt-1">{item.label}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
+                </div>
               </>
             )}
 
             {reportsError && <p className="mb-4 text-sm text-red-600">{reportsError}</p>}
 
             {successMessage && (
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-2">
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                   Welcome, {user?.name}!
                 </h2>
                 <p className="text-sm text-green-600">{successMessage}</p>
@@ -1729,10 +1579,10 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === 'users' && (
-          <section className="bg-white rounded-2xl shadow-sm p-6">
+          <section className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-semibold text-gray-900">User Management</h2>
+                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">User Management</h2>
                 <p className="text-sm text-gray-500 mt-1">
                   Search your existing users and review their roles and account status.
                 </p>
@@ -1745,7 +1595,9 @@ const AdminDashboard = () => {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search users..."
-                  className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm text-gray-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 
+                  py-3 pl-11 pr-4 text-sm text-gray-700 dark:text-gray-200 outline-none transition focus:border-indigo-400 
+                  focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/40"
                 />
               </label>
             </div>
@@ -1759,7 +1611,7 @@ const AdminDashboard = () => {
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-50 text-left text-gray-600">
+                    <tr className="bg-gray-50 dark:bg-gray-800 text-left text-gray-600 dark:text-gray-300 dark:text-gray-300">
                       <th className="px-4 py-4 font-semibold">User</th>
                       <th className="px-4 py-4 font-semibold">Email</th>
                       <th className="px-4 py-4 font-semibold">Role</th>
@@ -1769,13 +1621,13 @@ const AdminDashboard = () => {
                   </thead>
                   <tbody>
                     {filteredUsers.map((entry) => (
-                      <tr key={entry._id} className="border-b border-gray-100 last:border-b-0">
-                        <td className="px-4 py-5 text-gray-900">{entry.name}</td>
-                        <td className="px-4 py-5 text-gray-600">{entry.email}</td>
-                        <td className="px-4 py-5 capitalize text-gray-600">
+                      <tr key={entry._id} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0">
+                        <td className="px-4 py-5 text-gray-900 dark:text-white">{entry.name}</td>
+                        <td className="px-4 py-5 text-gray-600 dark:text-gray-300">{entry.email}</td>
+                        <td className="px-4 py-5 capitalize text-gray-600 dark:text-gray-300">
                           {entry.role?.replace('_', ' ')}
                         </td>
-                        <td className="px-4 py-5 text-gray-600">{formatDate(entry.createdAt)}</td>
+                        <td className="px-4 py-5 text-gray-600 dark:text-gray-300">{formatDate(entry.createdAt)}</td>
                         <td className="px-4 py-5">
                           <span
                             className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
@@ -1801,10 +1653,10 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === 'manage' && (
-          <section className="bg-white rounded-2xl shadow-sm p-6">
+          <section className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-semibold text-gray-900">Manage Users</h2>
+                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Manage Users</h2>
                 <p className="text-sm text-gray-500 mt-1">
                   Handle account support actions such as password resets and deletions from one place.
                 </p>
@@ -1817,7 +1669,10 @@ const AdminDashboard = () => {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search users..."
-                  className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm text-gray-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white 
+                  dark:bg-gray-800 py-3 pl-11 pr-4 text-sm text-gray-700 dark:text-gray-200 
+                  outline-none transition focus:border-indigo-400 focus:ring-2 
+                  focus:ring-indigo-100 dark:focus:ring-indigo-900/40"
                 />
               </label>
             </div>
@@ -1860,7 +1715,7 @@ const AdminDashboard = () => {
                   <>
                     <table className="min-w-full text-sm">
                       <thead>
-                        <tr className="bg-gray-50 text-left text-gray-600">
+                        <tr className="bg-gray-50 dark:bg-gray-800 text-left text-gray-600 dark:text-gray-300">
                           <th className="px-4 py-4 font-semibold">User</th>
                           <th className="px-4 py-4 font-semibold">Email</th>
                           <th className="px-4 py-4 font-semibold">Role</th>
@@ -1871,10 +1726,10 @@ const AdminDashboard = () => {
                       </thead>
                       <tbody>
                         {filteredUsers.map((entry) => (
-                          <tr key={entry._id} className="border-b border-gray-100 last:border-b-0">
-                            <td className="px-4 py-5 text-gray-900">{entry.name}</td>
-                            <td className="px-4 py-5 text-gray-600">{entry.email}</td>
-                            <td className="px-4 py-5 capitalize text-gray-600">
+                          <tr key={entry._id} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0">
+                            <td className="px-4 py-5 text-gray-900 dark:text-white">{entry.name}</td>
+                            <td className="px-4 py-5 text-gray-600 dark:text-gray-300">{entry.email}</td>
+                            <td className="px-4 py-5 capitalize text-gray-600 dark:text-gray-300">
                               {entry.role?.replace('_', ' ')}
                             </td>
                             <td className="px-4 py-5">
@@ -1924,7 +1779,7 @@ const AdminDashboard = () => {
                   <>
                     <table className="min-w-full text-sm">
                       <thead>
-                        <tr className="bg-gray-50 text-left text-gray-600">
+                        <tr className="bg-gray-50 dark:bg-gray-800 text-left text-gray-600 dark:text-gray-300">
                           <th className="px-4 py-4 font-semibold">User</th>
                           <th className="px-4 py-4 font-semibold">Email</th>
                           <th className="px-4 py-4 font-semibold">Role</th>
@@ -1951,13 +1806,13 @@ const AdminDashboard = () => {
                             );
                           })
                           .map((request) => (
-                            <tr key={request._id} className="border-b border-gray-100 last:border-b-0">
-                              <td className="px-4 py-5 text-gray-900">{request.user?.name}</td>
-                              <td className="px-4 py-5 text-gray-600">{request.user?.email}</td>
-                              <td className="px-4 py-5 capitalize text-gray-600">
+                            <tr key={request._id} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0">
+                              <td className="px-4 py-5 text-gray-900 dark:text-white">{request.user?.name}</td>
+                              <td className="px-4 py-5 text-gray-600 dark:text-gray-300">{request.user?.email}</td>
+                              <td className="px-4 py-5 capitalize text-gray-600 dark:text-gray-300">
                                 {request.user?.role?.replace('_', ' ')}
                               </td>
-                              <td className="px-4 py-5 text-gray-600">
+                              <td className="px-4 py-5 text-gray-600 dark:text-gray-300">
                                 {formatDate(request.requestedAt)}
                               </td>
                               <td className="px-4 py-5">
@@ -2009,49 +1864,35 @@ const AdminDashboard = () => {
         {activeTab === 'reports' && (
           <section>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Analysed Reports</h2>
-              <div className="flex items-center gap-3">
-                {filteredReports.some(r => r.errors?.length > 0) && (
-                  <button
-                    onClick={() => {
-                      const allExpanded = filteredReports.every(r => expandedReports[r._id]);
-                      const next = {};
-                      filteredReports.forEach(r => { next[r._id] = !allExpanded; });
-                      setExpandedReports(next);
-                    }}
-                    className="text-sm text-indigo-600 border border-indigo-200 rounded-lg px-3 py-2 hover:bg-indigo-50"
-                  >
-                    {filteredReports.every(r => expandedReports[r._id]) ? 'Collapse All' : 'Expand All'}
-                  </button>
-                )}
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
-                  <input
-                    type="text"
-                    placeholder="Search reports..."
-                    value={reportSearch}
-                    onChange={(e) => setReportSearch(e.target.value)}
-                    className="border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm"
-                  />
-                </div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Analysed Reports</h2>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search reports..."
+                  value={reportSearch}
+                  onChange={(e) => setReportSearch(e.target.value)}
+                  className="border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white 
+                  dark:text-gray-100 rounded-lg pl-8 pr-3 py-2 text-sm"
+                />
               </div>
             </div>
 
             {reportsError && <p className="mb-4 text-sm text-red-600">{reportsError}</p>}
 
             {loadingReports ? (
-              <div className="bg-white rounded-xl shadow-sm p-6 text-sm text-gray-500">
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6 text-sm text-gray-500">
                 Loading reports...
               </div>
             ) : (
               <div className="space-y-4">
                 {filteredReports.map((report) => (
-                  <div key={report._id} className="bg-white rounded-xl border border-gray-200 p-6 hover:border-indigo-400 transition-colors">
+                  <div key={report._id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:border-indigo-400 transition-colors">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-indigo-600 text-lg">📄</span>
-                          <p className="font-bold text-gray-900 text-base">{report.filename}</p>
+                          <p className="font-bold text-gray-900 dark:text-white text-base">{report.filename}</p>
                         </div>
                         <p className="text-sm text-gray-500 mb-1">
                           Analyzed by <span className="font-semibold text-gray-700">{report.analyzedBy?.name ?? 'Unknown'}</span> on{' '}
@@ -2065,28 +1906,17 @@ const AdminDashboard = () => {
 
                         {report.errors?.length > 0 && (
                           <div className="border-t border-gray-100 pt-3">
-                            <button
-                              onClick={() => setExpandedReports(prev => ({ ...prev, [report._id]: !prev[report._id] }))}
-                              className="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-indigo-600 transition-colors mb-2"
-                            >
-                              {expandedReports[report._id]
-                                ? <ChevronDown className="w-4 h-4" />
-                                : <ChevronRight className="w-4 h-4" />
-                              }
-                              Errors Detected ({report.errors.length})
-                            </button>
-                            {expandedReports[report._id] && (
-                              <div className="space-y-1 ml-5">
-                                {report.errors.map((error, index) => (
-                                  <div key={error._id || index} className="flex items-center gap-3">
-                                    <span className="text-xs px-2 py-0.5 rounded font-medium min-w-[80px] text-center bg-gray-100 text-gray-700">
-                                      {error.type}
-                                    </span>
-                                    <span className="text-sm text-gray-600">{error.message}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                            <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-2">Errors Detected:</p>
+                            <div className="space-y-1">
+                              {report.errors.map((error, index) => (
+                                <div key={error._id || index} className="flex items-center gap-3">
+                                  <span className="text-xs px-2 py-0.5 rounded font-medium min-w-[80px] text-center bg-gray-100 text-gray-700">
+                                    {error.type}
+                                  </span>
+                                  <span className="text-sm text-gray-600 dark:text-gray-300">{error.message}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -2108,7 +1938,7 @@ const AdminDashboard = () => {
 
                           {openTrainingMenu === report._id && (
                             <div className="absolute right-0 top-10 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-10 w-52">
-                              <p className="text-xs font-semibold text-gray-600 mb-2">Add as training example:</p>
+                              <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-2">Add as training example:</p>
                               <button
                                 onClick={() => handleAddToTraining(report._id, 'good')}
                                 className="w-full text-left text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded px-3 py-2 mb-1"
@@ -2137,33 +1967,33 @@ const AdminDashboard = () => {
           <section>
             {/* Training Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-white rounded-xl shadow-sm p-4">
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-4">
                 <p className="text-2xl font-bold text-green-600">{trainingStats.goodExamples}</p>
                 <p className="text-sm text-gray-500">Good Examples</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-4">
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-4">
                 <p className="text-2xl font-bold text-red-500">{trainingStats.badExamples}</p>
                 <p className="text-sm text-gray-500">Bad Examples</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-4">
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-4">
                 <p className="text-2xl font-bold text-indigo-600">{trainingStats.trainedExamples}</p>
                 <p className="text-sm text-gray-500">Trained</p>
               </div>
-              <div className="bg-white rounded-xl shadow-sm p-4">
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-4">
                 <p className="text-2xl font-bold text-amber-500">{trainingStats.pendingExamples}</p>
                 <p className="text-sm text-gray-500">Pending</p>
               </div>
             </div>
 
             {/* Upload Section */}
-            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Training Example</h2>
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6 mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Upload Training Example</h2>
               <form onSubmit={handleTrainingUpload}>
                 <div
                   className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition ${
                     dragActive
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : 'border-gray-300 hover:border-indigo-400'
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30'
+                      : 'border-gray-300 dark:border-gray-700 hover:border-indigo-400'
                   }`}
                   onDragEnter={handleDrag}
                   onDragLeave={handleDrag}
@@ -2187,7 +2017,7 @@ const AdminDashboard = () => {
                       </p>
                     </div>
                   ) : (
-                    <div className="text-gray-500">
+                    <div className="text-gray-500 dark:text-gray-400">
                       <FileText className="w-10 h-10 mx-auto mb-2 text-gray-400" />
                       <p className="font-medium">Drop a PDF here or click to upload</p>
                       <p className="text-sm">Maximum file size: 120MB</p>
@@ -2245,9 +2075,9 @@ const AdminDashboard = () => {
             )}
 
             {/* Training Examples List */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Training Examples</h2>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Training Examples</h2>
                 <button
                   onClick={handleSyncTraining}
                   disabled={syncingTraining}
@@ -2267,7 +2097,7 @@ const AdminDashboard = () => {
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
-                      <tr className="bg-gray-50 text-left text-gray-600">
+                      <tr className="bg-gray-50 dark:bg-gray-800 text-left text-gray-600 dark:text-gray-300">
                         <th className="px-4 py-3 font-semibold">Filename</th>
                         <th className="px-4 py-3 font-semibold">Type</th>
                         <th className="px-4 py-3 font-semibold">Status</th>
@@ -2277,8 +2107,8 @@ const AdminDashboard = () => {
                     </thead>
                     <tbody>
                       {trainingExamples.map((example) => (
-                        <tr key={example._id} className="border-b border-gray-100 last:border-b-0">
-                          <td className="px-4 py-4 text-gray-900">
+                        <tr key={example._id} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0">
+                          <td className="px-4 py-4 text-gray-900 dark:text-white">
                             <div className="flex items-center gap-2">
                               <FileText className="w-4 h-4 text-gray-400" />
                               <span className="truncate max-w-[200px]">{example.filename}</span>
@@ -2312,7 +2142,7 @@ const AdminDashboard = () => {
                               {example.status}
                             </span>
                           </td>
-                          <td className="px-4 py-4 text-gray-600">
+                          <td className="px-4 py-4 text-gray-600 dark:text-gray-300">
                             {formatDate(example.createdAt)}
                           </td>
                           <td className="px-4 py-4">
@@ -2337,14 +2167,14 @@ const AdminDashboard = () => {
 
         {/* ── TEAMS TAB ── */}
         {activeTab === 'teams' && (
-          <div className="bg-white rounded-xl shadow-sm p-6">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6">
             {leadSuccessMessage && (
               <div className="mb-4 px-4 py-3 bg-green-100 text-green-800 rounded-lg text-sm font-medium">
                 {leadSuccessMessage}
               </div>
             )}
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Teams</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Teams</h2>
               <button
                 onClick={() => { setTeamError(''); setNewTeamName(''); setShowCreateTeamModal(true); }}
                 className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
@@ -2358,7 +2188,7 @@ const AdminDashboard = () => {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-gray-500 bg-gray-50">
+                  <tr className="text-left text-gray-500 dark:text-gray-300 bg-gray-50 dark:bg-gray-800">
                     <th className="pb-3 pt-3 px-2">TEAM NAME</th>
                     <th className="pb-3 pt-3 px-2">CREATED</th>
                     <th className="pb-3 pt-3 px-2">WARNING</th>
@@ -2368,7 +2198,7 @@ const AdminDashboard = () => {
                 <tbody>
                   {teams.map(t => (
                     <tr key={t._id} className="border-b last:border-0 hover:bg-gray-50">
-                      <td className="py-4 px-2 text-gray-900 font-medium">{t.name}</td>
+                      <td className="py-4 px-2 text-gray-900 dark:text-white font-medium">{t.name}</td>
                       <td className="py-4 px-2 text-gray-500">
                         {new Date(t.createdAt).toLocaleDateString('en-GB', {
                           day: 'numeric', month: 'short', year: 'numeric'
@@ -2396,8 +2226,8 @@ const AdminDashboard = () => {
             {/* Manage Team Modal */}
             {manageTeamId && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 w-full max-w-sm">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     {teams.find(t => t._id === manageTeamId)?.name}
                   </h3>
                   <p className="text-sm text-gray-500 mb-5">Choose an action for this team</p>
@@ -2420,7 +2250,8 @@ const AdminDashboard = () => {
                   </div>
                   <button
                     onClick={() => setManageTeamId(null)}
-                    className="mt-4 w-full text-sm text-gray-600 border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-50"
+                    className="mt-4 w-full text-sm text-gray-600 dark:text-gray-300 border border-gray-300 
+                    dark:border-gray-700 rounded-lg px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800"
                   >
                     Close
                   </button>
@@ -2429,15 +2260,15 @@ const AdminDashboard = () => {
                 {/* Confirm Delete Team */}
                 {confirmDeleteTeam && (
                   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                    <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Team</h3>
-                      <p className="text-sm text-gray-600 mb-5">
+                    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 w-full max-w-sm">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Delete Team</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mb-5">
                         Are you sure you want to delete <span className="font-semibold">{teams.find(t => t._id === manageTeamId)?.name}</span>? This will remove the team and all its member associations. This action cannot be undone.
                       </p>
                       <div className="flex justify-end gap-3">
                         <button
                           onClick={() => setConfirmDeleteTeam(false)}
-                          className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                          className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                         >
                           Cancel
                         </button>
@@ -2457,8 +2288,8 @@ const AdminDashboard = () => {
             {/* Add Members Overlay */}
             {showAddMembers && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Add Members</h3>
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Add Members</h3>
                   <p className="text-sm text-gray-500 mb-4">
                     {teams.find(t => t._id === manageTeamId)?.name}
                   </p>
@@ -2468,7 +2299,8 @@ const AdminDashboard = () => {
                     value={addMemberSearch}
                     onChange={(e) => setAddMemberSearch(e.target.value)}
                     autoFocus
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    className="w-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 
+                    text-gray-900 dark:text-white rounded-lg px-4 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   />
                   <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
                     {users
@@ -2490,7 +2322,7 @@ const AdminDashboard = () => {
                               className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                             />
                             <div>
-                              <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white ">{u.name}</p>
                               <p className="text-xs text-gray-500">{u.email}</p>
                             </div>
                           </label>
@@ -2500,7 +2332,7 @@ const AdminDashboard = () => {
                   <div className="flex justify-between items-center mt-4">
                     <button
                       onClick={() => setShowAddMembers(false)}
-                      className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                      className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
                       Back
                     </button>
@@ -2522,8 +2354,8 @@ const AdminDashboard = () => {
               const members = team?.members || [];
               return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                  <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Team Members</h3>
+                  <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Team Members</h3>
                     <p className="text-sm text-gray-500 mb-4">{team?.name}</p>
                     {members.length === 0 ? (
                       <p className="text-gray-400 text-sm text-center py-8">No members in this team yet.</p>
@@ -2535,13 +2367,13 @@ const AdminDashboard = () => {
                               {m.name?.charAt(0).toUpperCase()}
                             </div>
                             <div className="flex-1">
-                              <p className="text-sm font-medium text-gray-900">{m.name}</p>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">{m.name}</p>
                               <p className="text-xs text-gray-500">{m.email}</p>
                             </div>
                             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                               m.role === 'team_leader'
                                 ? 'bg-green-100 text-green-700'
-                                : 'bg-gray-100 text-gray-600'
+                                : 'bg-gray-100 text-gray-600 dark:text-gray-300'
                             }`}>
                               {m.role === 'team_leader' ? 'Team Leader' : 'User'}
                             </span>
@@ -2557,7 +2389,7 @@ const AdminDashboard = () => {
                     )}
                     <button
                       onClick={() => { setShowViewMembers(false); setConfirmRemoveMember(null); }}
-                      className="mt-4 px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                      className="mt-4 px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 rounded-lg hover:bg-gray-50"
                     >
                       Back
                     </button>
@@ -2566,15 +2398,15 @@ const AdminDashboard = () => {
                   {/* Confirm Remove Member */}
                   {confirmRemoveMember && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
-                      <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Remove Member</h3>
-                        <p className="text-sm text-gray-600 mb-5">
+                      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 w-full max-w-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Remove Member</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-5">
                           Are you sure you want to remove <span className="font-semibold">{confirmRemoveMember.name}</span> from this team? This action cannot be undone.
                         </p>
                         <div className="flex justify-end gap-3">
                           <button
                             onClick={() => setConfirmRemoveMember(null)}
-                            className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                           >
                             Cancel
                           </button>
@@ -2598,8 +2430,8 @@ const AdminDashboard = () => {
               const members = team?.members || [];
               return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                  <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Assign Team Lead</h3>
+                  <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Assign Team Lead</h3>
                     <p className="text-sm text-gray-500 mb-4">{team?.name}</p>
                     {members.length === 0 ? (
                       <p className="text-gray-400 text-sm text-center py-8">No members in this team. Add members first.</p>
@@ -2624,7 +2456,7 @@ const AdminDashboard = () => {
                                 {m.name?.charAt(0).toUpperCase()}
                               </div>
                               <div className="flex-1">
-                                <p className="text-sm font-medium text-gray-900">{m.name}</p>
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">{m.name}</p>
                                 <p className="text-xs text-gray-500">{m.email}</p>
                               </div>
                               {isCurrentLead && (
@@ -2638,7 +2470,7 @@ const AdminDashboard = () => {
                     <div className="flex justify-between items-center mt-4">
                       <button
                         onClick={() => setShowAssignLead(false)}
-                        className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                        className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                       >
                         Back
                       </button>
@@ -2660,15 +2492,15 @@ const AdminDashboard = () => {
                   {/* Confirm Assign Lead */}
                   {confirmLead && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
-                      <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Team Lead</h3>
-                        <p className="text-sm text-gray-600 mb-5">
+                      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 w-full max-w-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Confirm Team Lead</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-5">
                           Are you sure you want to assign <span className="font-semibold">{confirmLead.name}</span> as the team lead for <span className="font-semibold">{team?.name}</span>?
                         </p>
                         <div className="flex justify-end gap-3">
                           <button
                             onClick={() => setConfirmLead(null)}
-                            className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                           >
                             Cancel
                           </button>
@@ -2689,127 +2521,9 @@ const AdminDashboard = () => {
             {/* Team Analytics Overlay */}
             {showTeamAnalytics && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-                  <div className="flex justify-between items-start mb-5">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Team Analytics</h3>
-                      <p className="text-sm text-gray-500">
-                        {teams.find(t => t._id === manageTeamId)?.name}
-                        {teamStats?.teamLead && (
-                          <span className="ml-2 text-xs text-indigo-600 font-medium">Lead: {teamStats.teamLead.name}</span>
-                        )}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => { setShowTeamAnalytics(false); setTeamStats(null); }}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                                    {/* Jump to individual stats button */}
-                  {teamFilterUser && !teamUserProfileLoading && teamUserProfileAnalytics && (
-                    <button
-                      onClick={() => document.getElementById('team-user-profile-stats')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                      className="flex items-center gap-2 mx-auto mt-4 mb-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium transition-colors border border-indigo-200"
-                    >
-                      <span>View Individual Statistics for {(() => {
-                        const currentTeam = teams.find(t => t._id === manageTeamId);
-                        const member = currentTeam?.members?.find(m => (typeof m === 'object' ? m._id : m) === teamFilterUser);
-                        return typeof member === 'object' ? member.name : 'selected member';
-                      })()}</span>
-                      <ArrowDown className="w-4 h-4 animate-bounce" />
-                    </button>
-                  )}
-
-                  {/* Team Analytics Filters */}
-                  <div className="bg-gray-50 rounded-lg p-4 mb-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Filter className="w-4 h-4 text-indigo-600" />
-                      <h4 className="text-sm font-semibold text-gray-700">Filter Analytics</h4>
-                      {(teamFilterRange !== 'all' || teamFilterUser || teamFilterResult) && (
-                        <button
-                          onClick={() => { setTeamFilterRange('all'); setTeamFilterUser(''); setTeamFilterResult(''); fetchTeamStats('all', '', ''); }}
-                          className="ml-auto text-xs text-indigo-600 hover:text-indigo-800 font-medium"
-                        >
-                          Clear all filters
-                        </button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Date Range</label>
-                        <select
-                          value={teamFilterRange}
-                          onChange={(e) => { setTeamFilterRange(e.target.value); fetchTeamStats(e.target.value, teamFilterUser, teamFilterResult); }}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                          <option value="all">All Time</option>
-                          <option value="7">Last 7 Days</option>
-                          <option value="30">Last 30 Days</option>
-                          <option value="90">Last 90 Days</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Member</label>
-                        <select
-                          value={teamFilterUser}
-                          onChange={(e) => { setTeamFilterUser(e.target.value); fetchTeamStats(teamFilterRange, e.target.value, teamFilterResult); }}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                          <option value="">All Members</option>
-                          {(() => {
-                            const currentTeam = teams.find(t => t._id === manageTeamId);
-                            return (currentTeam?.members || []).map(m => {
-                              const member = typeof m === 'object' ? m : null;
-                              return member ? (
-                                <option key={member._id} value={member._id}>{member.name}</option>
-                              ) : null;
-                            });
-                          })()}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Result</label>
-                        <select
-                          value={teamFilterResult}
-                          onChange={(e) => { setTeamFilterResult(e.target.value); fetchTeamStats(teamFilterRange, teamFilterUser, e.target.value); }}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                          <option value="">All Results</option>
-                          <option value="good">Passed</option>
-                          <option value="bad">Failed</option>
-                          <option value="uncertain">Uncertain</option>
-                        </select>
-                      </div>
-                    </div>
-                    {/* Active filter pills */}
-                    {(teamFilterRange !== 'all' || teamFilterUser || teamFilterResult) && (
-                      <div className="flex items-center gap-2 flex-wrap mt-3 text-sm">
-                        <span className="text-indigo-700 font-medium text-xs">Showing:</span>
-                        {teamFilterRange !== 'all' && (
-                          <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                            Last {teamFilterRange} days
-                          </span>
-                        )}
-                        {teamFilterUser && (
-                          <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                            Member: {(() => {
-                              const currentTeam = teams.find(t => t._id === manageTeamId);
-                              const member = currentTeam?.members?.find(m => (typeof m === 'object' ? m._id : m) === teamFilterUser);
-                              return typeof member === 'object' ? member.name : 'Unknown';
-                            })()}
-                          </span>
-                        )}
-                        {teamFilterResult && (
-                          <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                            Result: {teamFilterResult === 'good' ? 'Passed' : teamFilterResult === 'bad' ? 'Failed' : 'Uncertain'}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Team Analytics</h3>
+                  <p className="text-sm text-gray-500 mb-5">{teams.find(t => t._id === manageTeamId)?.name}</p>
 
                   {teamStatsLoading ? (
                     <p className="text-gray-400 text-sm text-center py-8 animate-pulse">Loading analytics...</p>
@@ -2817,46 +2531,46 @@ const AdminDashboard = () => {
                     <>
                       {/* Stat cards */}
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                           <div className="flex items-center">
                             <div className="bg-blue-500 p-2.5 rounded-lg">
                               <Users className="w-5 h-5 text-white" />
                             </div>
                             <div className="ml-3">
-                              <p className="text-xl font-bold text-gray-900">{teamStats.totalMembers}</p>
+                              <p className="text-xl font-bold text-gray-900 dark:text-white">{teamStats.totalMembers}</p>
                               <p className="text-xs text-gray-500">Members</p>
                             </div>
                           </div>
                         </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                           <div className="flex items-center">
                             <div className="bg-green-500 p-2.5 rounded-lg">
                               <FileText className="w-5 h-5 text-white" />
                             </div>
                             <div className="ml-3">
-                              <p className="text-xl font-bold text-gray-900">{teamStats.totalReports}</p>
+                              <p className="text-xl font-bold text-gray-900 dark:text-white">{teamStats.totalReports}</p>
                               <p className="text-xs text-gray-500">Reports</p>
                             </div>
                           </div>
                         </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                           <div className="flex items-center">
                             <div className="bg-red-500 p-2.5 rounded-lg">
                               <AlertTriangle className="w-5 h-5 text-white" />
                             </div>
                             <div className="ml-3">
-                              <p className="text-xl font-bold text-gray-900">{teamStats.totalErrors}</p>
+                              <p className="text-xl font-bold text-gray-900 dark:text-white">{teamStats.totalErrors}</p>
                               <p className="text-xs text-gray-500">Errors Found</p>
                             </div>
                           </div>
                         </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                           <div className="flex items-center">
                             <div className="bg-amber-500 p-2.5 rounded-lg">
                               <Clock className="w-5 h-5 text-white" />
                             </div>
                             <div className="ml-3">
-                              <p className="text-xl font-bold text-gray-900">{teamStats.timeSaved}h</p>
+                              <p className="text-xl font-bold text-gray-900 dark:text-white">{teamStats.timeSaved}h</p>
                               <p className="text-xs text-gray-500">Time Saved</p>
                             </div>
                           </div>
@@ -2887,8 +2601,8 @@ const AdminDashboard = () => {
 
                       {/* Charts */}
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                        <div className="border border-gray-200 rounded-xl p-4">
-                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Most Common Errors</h4>
+                        <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Most Common Errors</h4>
                           <ResponsiveContainer width="100%" height={180}>
                             <BarChart data={teamStats.errorBreakdown.map(e => ({ name: e.name, errors: e.value }))}>
                               <XAxis dataKey="name" tick={{ fontSize: 10 }} />
@@ -2898,8 +2612,8 @@ const AdminDashboard = () => {
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
-                        <div className="border border-gray-200 rounded-xl p-4">
-                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Error Type Distribution</h4>
+                        <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Error Type Distribution</h4>
                           <ResponsiveContainer width="100%" height={180}>
                             <PieChart>
                               <Pie data={teamStats.errorBreakdown} dataKey="value" nameKey="name" outerRadius={65} label={({ name, value }) => `${name}: ${value}`}>
@@ -2912,8 +2626,8 @@ const AdminDashboard = () => {
                       </div>
 
                       {/* Time savings */}
-                      <div className="border border-gray-200 rounded-xl p-4 mb-6">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Time Savings Analysis</h4>
+                      <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Time Savings Analysis</h4>
                         <div className="grid grid-cols-3 gap-3">
                           <div className="bg-purple-100 rounded-lg p-4 text-center">
                             <p className="text-2xl font-bold text-indigo-600">{teamStats.manualTime}h</p>
@@ -3034,7 +2748,7 @@ const AdminDashboard = () => {
 
                   <button
                     onClick={() => { setShowTeamAnalytics(false); setTeamStats(null); }}
-                    className="mt-4 px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    className="mt-4 px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
                     Back
                   </button>
@@ -3045,8 +2759,8 @@ const AdminDashboard = () => {
             {/* Create Team Modal */}
             {showCreateTeamModal && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Create a New Team</h3>
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 w-full max-w-md">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Create a New Team</h3>
                   <form onSubmit={handleCreateTeam}>
                     <input
                       type="text"
@@ -3063,7 +2777,7 @@ const AdminDashboard = () => {
                       <button
                         type="button"
                         onClick={() => setShowCreateTeamModal(false)}
-                        className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                        className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                       >
                         Cancel
                       </button>
@@ -3086,11 +2800,11 @@ const AdminDashboard = () => {
 
       {showCreateUserModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-start justify-between border-b border-gray-200 px-6 py-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Create New User</h2>
-                <p className="mt-1 text-sm text-gray-600">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Create New User</h2>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
                   Add the user details below and assign their role.
                 </p>
               </div>
@@ -3099,7 +2813,9 @@ const AdminDashboard = () => {
                 type="button"
                 onClick={closeCreateUserModal}
                 disabled={submitting}
-                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 
+                dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 
+                disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Close create user modal"
               >
                 <X className="h-5 w-5" />
@@ -3108,7 +2824,7 @@ const AdminDashboard = () => {
 
             <form onSubmit={handleCreateUser} className="space-y-4 px-6 py-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Full Name
                 </label>
                 <input
@@ -3116,13 +2832,14 @@ const AdminDashboard = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2"
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white 
+                  dark:bg-gray-800 text-gray-900 dark:text-white px-4 py-2"
                   placeholder="Jane Smith"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Email Address
                 </label>
                 <input
@@ -3130,7 +2847,8 @@ const AdminDashboard = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2"
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-700 
+                  bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-4 py-2"
                   placeholder="jane@example.com"
                 />
               </div>
@@ -3142,7 +2860,8 @@ const AdminDashboard = () => {
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2"
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-700 
+                  bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-4 py-2"
                 >
                   <option value="user">User</option>
                   <option value="team_leader">Team Leader</option>
@@ -3159,7 +2878,9 @@ const AdminDashboard = () => {
                   type="button"
                   onClick={closeCreateUserModal}
                   disabled={submitting}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-gray-700 
+                  dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed 
+                  disabled:opacity-50"
                 >
                   Cancel
                 </button>

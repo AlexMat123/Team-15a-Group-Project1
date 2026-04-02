@@ -2,9 +2,10 @@ import { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { Moon, Sun, Contrast, Type, Sparkles } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const Settings = () => {
-  const [theme, setTheme] = useState('light');
+  const { theme, setTheme } = useAuth();
   const [highContrast, setHighContrast] = useState(false);
   const [largeText, setLargeText] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -21,25 +22,25 @@ const Settings = () => {
     }`;
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
       <Header />
 
       <main className="flex-1 max-w-4xl mx-auto px-4 py-8 w-full">
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="text-gray-600 mt-2">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
+          <p className="text-gray-600 dark:text-gray-300 mt-2">
             Manage display and accessibility preferences for your account.
           </p>
 
           <div className="mt-8 space-y-6">
-            <section className="border rounded-xl p-4">
+            <section className="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
                     <Moon className="w-5 h-5 text-indigo-600" />
-                    <h2 className="text-lg font-semibold text-gray-900">Theme</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Theme</h2>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                     Choose how the interface appears while using the report system.
                   </p>
                 </div>
@@ -76,14 +77,14 @@ const Settings = () => {
               </div>
             </section>
 
-            <section className="border rounded-xl p-4">
+            <section className="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
                     <Contrast className="w-5 h-5 text-indigo-600" />
-                    <h2 className="text-lg font-semibold text-gray-900">High Contrast</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">High Contrast</h2>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                     Increase contrast to make text and controls easier to distinguish.
                   </p>
                 </div>
@@ -109,9 +110,9 @@ const Settings = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <Type className="w-5 h-5 text-indigo-600" />
-                    <h2 className="text-lg font-semibold text-gray-900">Larger Text</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white"> Text</h2>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                     Increase text size for easier reading across pages.
                   </p>
                 </div>
@@ -137,9 +138,9 @@ const Settings = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-indigo-600" />
-                    <h2 className="text-lg font-semibold text-gray-900">Reduced Motion</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Reduced Motion</h2>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                     Minimise animations and transitions throughout the interface.
                   </p>
                 </div>
@@ -165,13 +166,14 @@ const Settings = () => {
             <button
               type="button"
               onClick={handleSave}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 
+              dark:bg-indigo-500 dark:hover:bg-indigo-600"
             >
               Save Preferences
             </button>
 
             {successMessage && (
-              <p className="text-sm text-green-600">{successMessage}</p>
+              <p className="text-sm text-green-600 dark:text-green-400">{successMessage}</p>
             )}
           </div>
         </div>

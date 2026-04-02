@@ -238,17 +238,17 @@ const Profile = () => {
     };
   });
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
       <Header />
 
       <main className="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <h1 className="text-2xl font-bold text-gray-900">Profile</h1>
-          <p className="text-gray-600 mt-2">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Profile</h1>
+          <p className="text-gray-600 dark:text-white mt-2">
             Manage your account settings and review analytics from your uploaded reports.
           </p>
 
-          <div className="mt-6 space-y-2 text-sm text-gray-700">
+          <div className="mt-6 space-y-2 text-sm text-gray-700 dark:text-white">
             <p><strong>Name:</strong> {user?.name}</p>
             <p><strong>Email:</strong> {user?.email}</p>
             <p><strong>Role:</strong> {user?.role}</p>
@@ -269,23 +269,23 @@ const Profile = () => {
           {errorMessage && <p className="mt-4 text-sm text-red-600">{errorMessage}</p>}
         </div>
 
-        <section className="bg-white rounded-2xl shadow-sm p-6 mt-6">
+        <section className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6 mt-6">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Report Analytics</h2>
-              <p className="text-gray-600 mt-1">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Report Analytics</h2>
+              <p className="text-gray-600 mt-1 dark:text-white">
                 A summary of your previously uploaded reports.
               </p>
             </div>
             <div className="w-full sm:w-56">
-              <label htmlFor="analytics-scope" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="analytics-scope" className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
                 Time Range
               </label>
               <select
                 id="analytics-scope"
                 value={selectedScope}
                 onChange={(event) => setSelectedScope(event.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className="w-full rounded-lg border border-gray-300 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
               >
                 <option value="week">Week</option>
                 <option value="month">Month</option>
@@ -295,7 +295,7 @@ const Profile = () => {
           </div>
 
           {analyticsLoading ? (
-            <div className="py-10 flex items-center justify-center text-gray-500">
+            <div className="py-10 flex items-center justify-center text-gray-500 ">
               <Loader2 className="w-6 h-6 animate-spin mr-3 text-indigo-600" />
               Loading analytics...
             </div>
@@ -353,7 +353,7 @@ const Profile = () => {
 
               <div className="mt-8">
                 <h3 className="text-lg font-semibold text-gray-900">Average Errors Per Report</h3>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-gray-500 dark:text-white t-1">
                   The average number of each error type found per analyzed report.
                 </p>
 
@@ -389,7 +389,7 @@ const Profile = () => {
 
               <div className="mt-8">
                 <h3 className="text-lg font-semibold text-gray-900">Pass Rate Over Time</h3>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-gray-500 dark:text-white mt-1">
                   Monthly pass percentage based on analyzed reports marked as passed.
                 </p>
 
@@ -429,7 +429,7 @@ const Profile = () => {
 
               <div className="mt-8">
                 <h3 className="text-lg font-semibold text-gray-900">Quality Score Trend</h3>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-gray-500  dark:text-white mt-1">
                   Per-report quality score over time based on the stored quality assessment.
                 </p>
 
@@ -467,7 +467,7 @@ const Profile = () => {
 
               <div className="mt-8">
                 <h3 className="text-lg font-semibold text-gray-900">Most Common Error Types</h3>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-gray-500 dark:text-white mt-1">
                   Ranked by frequency so you can see the patterns affecting your reports most often.
                 </p>
 
@@ -492,7 +492,7 @@ const Profile = () => {
 
               <div className="mt-8">
                 <h3 className="text-lg font-semibold text-gray-900">Top Recurring Checklist Failures</h3>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-gray-500 dark:text-white mt-1">
                   The most frequently repeated issue messages across all analyzed reports.
                 </p>
 
@@ -524,7 +524,7 @@ const Profile = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900">Recent Reports</h3>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-500 dark:text-white">
                       Your most recently uploaded reports.
                     </p>
                   </div>
@@ -541,22 +541,22 @@ const Profile = () => {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
                             Report
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
                             Status
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
                             Errors
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
                             Result
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
                             Date
                           </th>
-                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
                             Action
                           </th>
                         </tr>
