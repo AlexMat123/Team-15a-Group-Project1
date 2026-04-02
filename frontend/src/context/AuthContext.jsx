@@ -15,7 +15,19 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
 
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.removeItem('theme');
+    }
+  }, [theme]);
+
+  
   useEffect(() => {
     const initAuth = async () => {
       if (token) {
@@ -69,6 +81,8 @@ export const AuthProvider = ({ children }) => {
     logout,
     changePassword,
     updateUser,
+    theme,
+    setTheme,
     isAuthenticated: !!token && !!user,
     isAdmin: user?.role === 'admin',
     isTeamLeader: user?.role === 'team_leader',
