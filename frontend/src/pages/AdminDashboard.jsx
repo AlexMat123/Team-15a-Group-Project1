@@ -42,6 +42,7 @@ import api from '../services/api';
 
 const tabs = [
   { id: 'overview', label: 'Overview' },
+  { id: 'analytics', label: 'Analytics' },
   { id: 'users', label: 'Users' },
   { id: 'manage', label: 'Manage' },
   { id: 'reports', label: 'Reports' },
@@ -180,6 +181,15 @@ const AdminDashboard = () => {
   const [syncingTraining, setSyncingTraining] = useState(false);
   const [deletingExampleId, setDeletingExampleId] = useState('');
   const [dragActive, setDragActive] = useState(false);
+
+  // --- Analytics state ---
+  const [analyticsLevel, setAnalyticsLevel] = useState('company');
+  const [analyticsTeamId, setAnalyticsTeamId] = useState('');
+  const [analyticsUserId, setAnalyticsUserId] = useState('');
+  const [analyticsRange, setAnalyticsRange] = useState('30');
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState('');
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -466,12 +476,38 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchAnalytics = async () => {
+    setLoadingAnalytics(true);
+    setAnalyticsError('');
+    try {
+      const params = new URLSearchParams({ level: analyticsLevel, range: analyticsRange });
+      if (analyticsLevel === 'team' && analyticsTeamId) {
+        params.append('teamId', analyticsTeamId);
+      }
+      if (analyticsLevel === 'user' && analyticsUserId) {
+        params.append('userId', analyticsUserId);
+      }
+      const response = await api.get(`/admin/analytics?${params.toString()}`);
+      setAnalyticsData(response.data);
+    } catch (error) {
+      setAnalyticsError(error.response?.data?.message || 'Failed to load analytics');
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchPasswordResetRequest();
     fetchTeams();
     fetchTrainingData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'analytics') {
+      fetchAnalytics();
+    }
+  }, [activeTab, analyticsLevel, analyticsTeamId, analyticsUserId, analyticsRange]);
 
   const stats = [
     { label: 'Total Users', value: users.length, icon: Users, color: 'bg-blue-500' },
@@ -1349,6 +1385,347 @@ const AdminDashboard = () => {
               </div>
             )}
           </>
+        )}
+
+        {/* ── ANALYTICS TAB ── */}
+        {activeTab === 'analytics' && (
+          <section>
+            {/* Filters */}
+            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Analytics Filters</h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Level</label>
+                  <select
+                    value={analyticsLevel}
+                    onChange={(e) => {
+                      setAnalyticsLevel(e.target.value);
+                      setAnalyticsTeamId('');
+                      setAnalyticsUserId('');
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="company">Company-wide</option>
+                    <option value="team">By Team</option>
+                    <option value="user">By User</option>
+                  </select>
+                </div>
+
+                {analyticsLevel === 'team' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Select Team</label>
+                    <select
+                      value={analyticsTeamId}
+                      onChange={(e) => setAnalyticsTeamId(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    >
+                      <option value="">All Teams</option>
+                      {teams.map((team) => (
+                        <option key={team._id} value={team._id}>{team.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {analyticsLevel === 'user' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Select User</label>
+                    <select
+                      value={analyticsUserId}
+                      onChange={(e) => setAnalyticsUserId(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    >
+                      <option value="">Select a user...</option>
+                      {users.map((u) => (
+                        <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Time Range</label>
+                  <select
+                    value={analyticsRange}
+                    onChange={(e) => setAnalyticsRange(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="7">Last 7 days</option>
+                    <option value="30">Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="all">All time</option>
+                  </select>
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    onClick={fetchAnalytics}
+                    disabled={loadingAnalytics}
+                    className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {loadingAnalytics ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {analyticsError && (
+              <div className="mb-4 px-4 py-3 bg-red-100 text-red-800 rounded-lg text-sm">
+                {analyticsError}
+              </div>
+            )}
+
+            {loadingAnalytics && !analyticsData ? (
+              <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-500">
+                Loading analytics...
+              </div>
+            ) : analyticsData ? (
+              <>
+                {/* Scope Label */}
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-gray-900">{analyticsData.scopeLabel}</h3>
+                  <p className="text-sm text-gray-500">
+                    {analyticsRange === 'all' ? 'All time' : `Last ${analyticsRange} days`}
+                  </p>
+                </div>
+
+                {/* Summary Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                  <div className="bg-white rounded-xl shadow-sm p-4">
+                    <p className="text-2xl font-bold text-indigo-600">{analyticsData.summary.totalReports}</p>
+                    <p className="text-sm text-gray-500">Total Reports</p>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm p-4">
+                    <p className="text-2xl font-bold text-green-600">{analyticsData.summary.analyzedReports}</p>
+                    <p className="text-sm text-gray-500">Analyzed</p>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm p-4">
+                    <p className="text-2xl font-bold text-red-500">{analyticsData.summary.totalErrors}</p>
+                    <p className="text-sm text-gray-500">Total Errors</p>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm p-4">
+                    <p className="text-2xl font-bold text-amber-500">{analyticsData.summary.averageErrorsPerReport}</p>
+                    <p className="text-sm text-gray-500">Avg Errors/Report</p>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm p-4">
+                    <p className="text-2xl font-bold text-purple-600">{analyticsData.summary.passRate}%</p>
+                    <p className="text-sm text-gray-500">Pass Rate</p>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm p-4">
+                    <p className="text-2xl font-bold text-teal-600">{analyticsData.summary.totalTimeSaved}h</p>
+                    <p className="text-sm text-gray-500">Time Saved</p>
+                  </div>
+                </div>
+
+                {/* Charts Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  {/* Error Breakdown */}
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Error Breakdown</h4>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={analyticsData.errorBreakdown}>
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#6366f1" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Quality Distribution */}
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Quality Distribution</h4>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Passed', value: analyticsData.qualityBreakdown.good },
+                            { name: 'Failed', value: analyticsData.qualityBreakdown.bad },
+                            { name: 'Uncertain', value: analyticsData.qualityBreakdown.uncertain },
+                          ]}
+                          dataKey="value"
+                          nameKey="name"
+                          outerRadius={80}
+                          label={({ name, value }) => value > 0 ? `${name}: ${value}` : ''}
+                        >
+                          <Cell fill="#10b981" />
+                          <Cell fill="#ef4444" />
+                          <Cell fill="#f59e0b" />
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Trend Chart */}
+                {analyticsData.trendData && analyticsData.trendData.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Reports Over Time</h4>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={analyticsData.trendData}>
+                        <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="reports" fill="#6366f1" name="Reports" />
+                        <Bar dataKey="passed" fill="#10b981" name="Passed" />
+                        <Bar dataKey="failed" fill="#ef4444" name="Failed" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* Time Savings */}
+                <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Time Savings Analysis</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-purple-100 rounded-lg p-4 text-center">
+                      <p className="text-2xl font-bold text-indigo-600">{analyticsData.summary.manualTime}h</p>
+                      <p className="text-sm text-gray-500 mt-1">Manual Review Time</p>
+                    </div>
+                    <div className="bg-green-100 rounded-lg p-4 text-center">
+                      <p className="text-2xl font-bold text-green-600">{analyticsData.summary.aiTime}h</p>
+                      <p className="text-sm text-gray-500 mt-1">AI Review Time</p>
+                    </div>
+                    <div className="bg-purple-100 rounded-lg p-4 text-center">
+                      <p className="text-2xl font-bold text-purple-600">{analyticsData.summary.timeSavedPercent}%</p>
+                      <p className="text-sm text-gray-500 mt-1">Time Saved</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Two Column: Top Errors & User Leaderboard */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  {/* Top Errors */}
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Top Common Errors</h4>
+                    {analyticsData.topErrors && analyticsData.topErrors.length > 0 ? (
+                      <div className="space-y-2">
+                        {analyticsData.topErrors.slice(0, 5).map((error, idx) => (
+                          <div key={idx} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                            <span className="text-sm text-gray-700 truncate max-w-[80%]">{error.message}</span>
+                            <span className="text-sm font-semibold text-red-600">{error.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400">No errors found</p>
+                    )}
+                  </div>
+
+                  {/* User Leaderboard */}
+                  {analyticsLevel === 'company' && analyticsData.userLeaderboard && analyticsData.userLeaderboard.length > 0 && (
+                    <div className="bg-white rounded-xl shadow-sm p-6">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">Top Users by Reports</h4>
+                      <div className="space-y-2">
+                        {analyticsData.userLeaderboard.slice(0, 5).map((u, idx) => (
+                          <div key={idx} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{u.userName}</p>
+                              <p className="text-xs text-gray-500">{u.reportCount} reports · {u.passRate}% pass rate</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setAnalyticsLevel('user');
+                                setAnalyticsUserId(u.odId);
+                              }}
+                              className="text-xs text-indigo-600 hover:underline"
+                            >
+                              View
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Team Members (when viewing team) */}
+                  {analyticsLevel === 'team' && analyticsData.scopeDetails && (
+                    <div className="bg-white rounded-xl shadow-sm p-6">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">Team Info</h4>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Team:</span> {analyticsData.scopeDetails.teamName}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Members:</span> {analyticsData.scopeDetails.memberCount}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* User Info (when viewing user) */}
+                  {analyticsLevel === 'user' && analyticsData.scopeDetails && (
+                    <div className="bg-white rounded-xl shadow-sm p-6">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">User Info</h4>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Name:</span> {analyticsData.scopeDetails.userName}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Email:</span> {analyticsData.scopeDetails.userEmail}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Role:</span> {analyticsData.scopeDetails.userRole?.replace('_', ' ')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Recent Reports */}
+                {analyticsData.recentReports && analyticsData.recentReports.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Recent Reports</h4>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 text-left text-gray-600">
+                            <th className="px-4 py-3 font-semibold">Filename</th>
+                            <th className="px-4 py-3 font-semibold">Status</th>
+                            <th className="px-4 py-3 font-semibold">Errors</th>
+                            <th className="px-4 py-3 font-semibold">Result</th>
+                            <th className="px-4 py-3 font-semibold">Analyzed By</th>
+                            <th className="px-4 py-3 font-semibold">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {analyticsData.recentReports.map((report) => (
+                            <tr key={report._id} className="border-b border-gray-100 last:border-0">
+                              <td className="px-4 py-3 text-gray-900 truncate max-w-[200px]">{report.filename}</td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                  report.status === 'analyzed' ? 'bg-green-100 text-green-700' :
+                                  report.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                  'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {report.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-gray-600">{report.errorCount}</td>
+                              <td className="px-4 py-3">
+                                {report.qualityLabel ? (
+                                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                    report.qualityLabel === 'good' ? 'bg-green-100 text-green-700' :
+                                    report.qualityLabel === 'bad' ? 'bg-red-100 text-red-700' :
+                                    'bg-amber-100 text-amber-700'
+                                  }`}>
+                                    {report.qualityLabel}
+                                  </span>
+                                ) : '-'}
+                              </td>
+                              <td className="px-4 py-3 text-gray-600">{report.analyzedBy}</td>
+                              <td className="px-4 py-3 text-gray-500">{formatDate(report.createdAt)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-500">
+                Select filters and click Refresh to load analytics
+              </div>
+            )}
+          </section>
         )}
 
         {activeTab === 'users' && (

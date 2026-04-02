@@ -87,6 +87,228 @@ router.get('/stats', protect, authorize('admin'), async (req, res) => {
   }
 });
 
+// GET /api/admin/analytics?level=company|team|user&teamId=xxx&userId=xxx&range=7|30|90|all
+router.get('/analytics', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { level = 'company', teamId, userId, range = '30' } = req.query;
+
+    const filter = {};
+    let scopeLabel = 'Company-wide';
+    let scopeDetails = null;
+
+    if (range && range !== 'all') {
+      const days = parseInt(range);
+      if (!isNaN(days) && days > 0) {
+        filter.createdAt = { $gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) };
+      }
+    }
+
+    if (level === 'team' && teamId) {
+      const team = await Team.findById(teamId).populate('members', 'name email').lean();
+      if (team) {
+        const memberIds = team.members.map((m) => m._id);
+        filter.analyzedBy = { $in: memberIds };
+        scopeLabel = `Team: ${team.name}`;
+        scopeDetails = { teamId: team._id, teamName: team.name, memberCount: team.members.length };
+      }
+    } else if (level === 'user' && userId) {
+      const targetUser = await User.findById(userId).select('name email role').lean();
+      if (targetUser) {
+        filter.analyzedBy = userId;
+        scopeLabel = `User: ${targetUser.name}`;
+        scopeDetails = { userId: targetUser._id, userName: targetUser.name, userEmail: targetUser.email, userRole: targetUser.role };
+      }
+    }
+
+    const reports = await Report.find(filter)
+      .select('filename status errorCount errorSummary timeSaved qualityAssessment createdAt analyzedBy errors')
+      .populate('analyzedBy', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const summary = {
+      totalReports: reports.length,
+      analyzedReports: 0,
+      pendingReports: 0,
+      failedReports: 0,
+      totalErrors: 0,
+      averageErrorsPerReport: 0,
+      totalTimeSaved: 0,
+    };
+
+    const errorBreakdown = {
+      placeholder: 0,
+      consistency: 0,
+      compliance: 0,
+      formatting: 0,
+      missing_data: 0,
+    };
+
+    const qualityBreakdown = { good: 0, bad: 0, uncertain: 0 };
+    const checklistFailureCounts = new Map();
+
+    const now = new Date();
+    const days = range === 'all' ? 365 : parseInt(range) || 30;
+    const bucketCount = Math.min(days, 12);
+    const bucketSizeDays = Math.ceil(days / bucketCount);
+
+    const trendBuckets = new Map();
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketEnd = new Date(now.getTime() - i * bucketSizeDays * 24 * 60 * 60 * 1000);
+      const bucketStart = new Date(bucketEnd.getTime() - bucketSizeDays * 24 * 60 * 60 * 1000);
+      const key = bucketEnd.toISOString().slice(0, 10);
+      trendBuckets.set(key, {
+        periodLabel: bucketEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+        periodStart: bucketStart,
+        periodEnd: bucketEnd,
+        reportCount: 0,
+        errorCount: 0,
+        passedCount: 0,
+        failedCount: 0,
+      });
+    }
+
+    const userStats = new Map();
+
+    reports.forEach((report) => {
+      summary.totalErrors += report.errorCount || 0;
+      summary.totalTimeSaved += report.timeSaved || 0;
+
+      if (report.status === 'analyzed') {
+        summary.analyzedReports += 1;
+      } else if (report.status === 'failed') {
+        summary.failedReports += 1;
+      } else {
+        summary.pendingReports += 1;
+      }
+
+      errorBreakdown.placeholder += report.errorSummary?.placeholder || 0;
+      errorBreakdown.consistency += report.errorSummary?.consistency || 0;
+      errorBreakdown.compliance += report.errorSummary?.compliance || 0;
+      errorBreakdown.formatting += report.errorSummary?.formatting || 0;
+      errorBreakdown.missing_data += report.errorSummary?.missing_data || 0;
+
+      const qualityLabel = report.qualityAssessment?.label;
+      if (qualityLabel && qualityBreakdown[qualityLabel] !== undefined) {
+        qualityBreakdown[qualityLabel] += 1;
+      }
+
+      (report.errors || []).forEach((error) => {
+        if (error?.message) {
+          const count = checklistFailureCounts.get(error.message) || 0;
+          checklistFailureCounts.set(error.message, count + 1);
+        }
+      });
+
+      const createdAt = new Date(report.createdAt);
+      for (const [key, bucket] of trendBuckets.entries()) {
+        if (createdAt <= bucket.periodEnd && createdAt > bucket.periodStart) {
+          bucket.reportCount += 1;
+          bucket.errorCount += report.errorCount || 0;
+          if (report.qualityAssessment?.label === 'good') bucket.passedCount += 1;
+          if (report.qualityAssessment?.label === 'bad') bucket.failedCount += 1;
+          break;
+        }
+      }
+
+      if (report.analyzedBy) {
+        const odId = report.analyzedBy._id?.toString() || report.analyzedBy.toString();
+        if (!userStats.has(odId)) {
+          userStats.set(odId, {
+            odId,
+            userName: report.analyzedBy.name || 'Unknown',
+            userEmail: report.analyzedBy.email || '',
+            reportCount: 0,
+            errorCount: 0,
+            passedCount: 0,
+            failedCount: 0,
+          });
+        }
+        const us = userStats.get(odId);
+        us.reportCount += 1;
+        us.errorCount += report.errorCount || 0;
+        if (report.qualityAssessment?.label === 'good') us.passedCount += 1;
+        if (report.qualityAssessment?.label === 'bad') us.failedCount += 1;
+      }
+    });
+
+    if (summary.analyzedReports > 0) {
+      summary.averageErrorsPerReport = Number((summary.totalErrors / summary.analyzedReports).toFixed(2));
+    }
+
+    const passRate = summary.analyzedReports > 0
+      ? Number(((qualityBreakdown.good / summary.analyzedReports) * 100).toFixed(1))
+      : 0;
+
+    const manualTime = parseFloat((summary.totalTimeSaved / 0.16).toFixed(1));
+    const timeSavedPercent = manualTime > 0 ? Math.round((summary.totalTimeSaved / manualTime) * 100) : 0;
+
+    const errorBreakdownArray = [
+      { name: 'Placeholder', value: errorBreakdown.placeholder },
+      { name: 'Consistency', value: errorBreakdown.consistency },
+      { name: 'Compliance', value: errorBreakdown.compliance },
+      { name: 'Formatting', value: errorBreakdown.formatting },
+      { name: 'Missing Data', value: errorBreakdown.missing_data },
+    ];
+
+    const topErrors = Array.from(checklistFailureCounts.entries())
+      .map(([message, count]) => ({ message, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    const trendData = Array.from(trendBuckets.values())
+      .reverse()
+      .map((bucket) => ({
+        period: bucket.periodLabel,
+        reports: bucket.reportCount,
+        errors: bucket.errorCount,
+        passed: bucket.passedCount,
+        failed: bucket.failedCount,
+        passRate: bucket.reportCount > 0 ? Number(((bucket.passedCount / bucket.reportCount) * 100).toFixed(1)) : 0,
+      }));
+
+    const userLeaderboard = Array.from(userStats.values())
+      .map((us) => ({
+        ...us,
+        passRate: us.reportCount > 0 ? Number(((us.passedCount / us.reportCount) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.reportCount - a.reportCount)
+      .slice(0, 10);
+
+    const recentReports = reports.slice(0, 10).map((r) => ({
+      _id: r._id,
+      filename: r.filename,
+      status: r.status,
+      errorCount: r.errorCount || 0,
+      qualityLabel: r.qualityAssessment?.label || null,
+      analyzedBy: r.analyzedBy?.name || 'Unknown',
+      createdAt: r.createdAt,
+    }));
+
+    res.json({
+      level,
+      range,
+      scopeLabel,
+      scopeDetails,
+      summary: {
+        ...summary,
+        passRate,
+        manualTime,
+        aiTime: Math.round(manualTime - summary.totalTimeSaved),
+        timeSavedPercent,
+      },
+      errorBreakdown: errorBreakdownArray,
+      qualityBreakdown,
+      trendData,
+      topErrors,
+      userLeaderboard,
+      recentReports,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/users
 router.get('/users', protect, authorize('admin'), async (req, res) => {
   try {
