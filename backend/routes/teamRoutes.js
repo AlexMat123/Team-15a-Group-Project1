@@ -187,9 +187,14 @@ router.get('/my-team/announcements', protect, async (req, res) => {
       .lean();
     if (!team) return res.status(404).json({ message: 'You are not part of any team' });
 
-    const sorted = (team.announcements || []).sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-    );
+    const userId = req.user._id.toString();
+    const sorted = (team.announcements || [])
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .map(ann => ({
+        ...ann,
+        readByMe: (ann.readBy || []).some(id => id.toString() === userId),
+      }));
+
     res.json(sorted);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -232,6 +237,27 @@ router.delete('/my-team/announcements/:announcementId', protect, authorize('team
     announcement.deleteOne();
     await team.save();
     res.json({ message: 'Announcement deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/teams/my-team/announcements/:announcementId/read — mark as read for current user
+router.patch('/my-team/announcements/:announcementId/read', protect, async (req, res) => {
+  try {
+    const team = await Team.findOne({ members: req.user._id });
+    if (!team) return res.status(404).json({ message: 'You are not part of any team' });
+
+    const announcement = team.announcements.id(req.params.announcementId);
+    if (!announcement) return res.status(404).json({ message: 'Announcement not found' });
+
+    const alreadyRead = announcement.readBy.some(id => id.toString() === req.user._id.toString());
+    if (!alreadyRead) {
+      announcement.readBy.push(req.user._id);
+      await team.save();
+    }
+
+    res.json({ message: 'Marked as read' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

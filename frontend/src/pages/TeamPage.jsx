@@ -46,6 +46,10 @@ const TeamPage = () => {
   const [savingAnnouncement, setSavingAnnouncement] = useState(false);
   const [annError, setAnnError] = useState('');
 
+  // Unread announcement overlay state
+  const [unreadQueue, setUnreadQueue] = useState([]);
+  const [acknowledging, setAcknowledging] = useState(false);
+
   const isTeamLead = user?.role === 'team_leader';
 
   const fetchGoals = async () => {
@@ -58,6 +62,22 @@ const TeamPage = () => {
       setCurrentStats(res.data.current || null);
     } catch (e) {
       console.error('Failed to load goals:', e);
+    }
+  };
+
+  const fetchAnnouncements = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('/api/teams/my-team/announcements', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const all = res.data || [];
+      setAnnouncements(all);
+      // Build unread queue (oldest unread first so they read in chronological order)
+      const unread = [...all].filter(a => !a.readByMe).reverse();
+      setUnreadQueue(unread);
+    } catch (e) {
+      console.error('Failed to load announcements:', e);
     }
   };
 
@@ -86,6 +106,7 @@ const TeamPage = () => {
     };
     fetchTeam();
     fetchGoals();
+    fetchAnnouncements();
   }, [user?.role]);
 
   const handleOpenAddModal = async () => {
@@ -147,11 +168,7 @@ const TeamPage = () => {
     setAnnError('');
     setAnnouncementsLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('/api/teams/my-team/announcements', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setAnnouncements(res.data);
+      await fetchAnnouncements();
     } catch (err) {
       setAnnError('Failed to load announcements');
     } finally {
@@ -199,6 +216,26 @@ const TeamPage = () => {
 
   const formatAnnDate = (date) =>
     new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  const handleAcknowledge = async (announcementId) => {
+    setAcknowledging(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(`/api/teams/my-team/announcements/${announcementId}/read`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // Mark as read in announcements list too
+      setAnnouncements(prev => prev.map(a =>
+        a._id === announcementId ? { ...a, readByMe: true } : a
+      ));
+    } catch (e) {
+      console.error('Failed to mark as read:', e);
+    } finally {
+      // Move to next in queue regardless of API result
+      setUnreadQueue(prev => prev.filter(a => a._id !== announcementId));
+      setAcknowledging(false);
+    }
+  };
 
   const handleAddGoal = async (e) => {
     e.preventDefault();
@@ -443,6 +480,70 @@ const TeamPage = () => {
                 )
               )}
             </div>
+
+            {/* Unread Announcements Overlay — shown on page load */}
+            {unreadQueue.length > 0 && (() => {
+              const current = unreadQueue[0];
+              const total = unreadQueue.length;
+              const index = announcements.filter(a => !a.readByMe).length - total;
+              return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center">
+                  {/* Full-screen blurred backdrop */}
+                  <div className="absolute inset-0 bg-gray-900/70 backdrop-blur-sm" />
+
+                  <div className="relative w-full max-w-lg mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden">
+                    {/* Coloured top bar */}
+                    <div className="bg-indigo-600 px-6 py-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Megaphone className="w-5 h-5 text-white" />
+                        <span className="text-white font-semibold text-sm">New Team Announcement</span>
+                      </div>
+                      <span className="text-indigo-200 text-xs font-medium">
+                        {total} unread {total === 1 ? 'announcement' : 'announcements'}
+                      </span>
+                    </div>
+
+                    {/* Progress dots */}
+                    {total > 1 && (
+                      <div className="flex gap-1.5 justify-center pt-4 px-6">
+                        {unreadQueue.map((a, i) => (
+                          <div
+                            key={a._id}
+                            className={`h-1.5 rounded-full transition-all ${i === 0 ? 'w-6 bg-indigo-600' : 'w-1.5 bg-gray-200'}`}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Content */}
+                    <div className="px-6 py-5">
+                      <h2 className="text-xl font-bold text-gray-900 mb-1">{current.title}</h2>
+                      <p className="text-xs text-gray-400 mb-4">
+                        Posted by {current.createdBy?.name || 'Team Leader'} · {formatAnnDate(current.createdAt)}
+                      </p>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
+                        {current.content}
+                      </p>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-6 pb-6 flex items-center justify-between">
+                      <p className="text-xs text-gray-400">
+                        {total > 1 ? `${total - 1} more to go` : 'Last announcement'}
+                      </p>
+                      <button
+                        onClick={() => handleAcknowledge(current._id)}
+                        disabled={acknowledging}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl disabled:opacity-50 transition-colors"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        {acknowledging ? 'Saving...' : total > 1 ? 'Got it — Next' : 'Got it — Close'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Announcements Modal */}
             {showAnnouncementsModal && (
