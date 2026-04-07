@@ -24,6 +24,19 @@ const teamSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    goals: [
+      {
+        title: { type: String, required: true, trim: true },
+        type: {
+          type: String,
+          enum: ['pass_rate', 'reports_submitted', 'avg_errors_below'],
+          required: true,
+        },
+        target: { type: Number, required: true },
+        deadline: { type: Date, default: null },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

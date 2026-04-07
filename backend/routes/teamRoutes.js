@@ -179,4 +179,83 @@ router.get('/my-team/stats', protect, authorize('team_leader'), async (req, res)
   }
 });
 
+// GET /api/teams/my-team/goals — all team members can view goals + current progress
+router.get('/my-team/goals', protect, async (req, res) => {
+  try {
+    const team = await Team.findOne({ members: req.user._id });
+    if (!team) return res.status(404).json({ message: 'You are not part of any team' });
+
+    const memberIds = team.members.map(m => m.toString());
+    const allReports = await Report.find({ analyzedBy: { $in: memberIds } });
+
+    // Filter by join date
+    const reports = allReports.filter(r => {
+      const joinDate = team.memberJoinDates?.get(r.analyzedBy.toString());
+      if (!joinDate) return true;
+      return new Date(r.createdAt) >= new Date(joinDate);
+    });
+
+    const totalReports = reports.length;
+    const analyzedReports = reports.filter(r => r.status === 'analyzed');
+    const passedReports = analyzedReports.filter(r => r.qualityAssessment?.label === 'good').length;
+    const passRate = analyzedReports.length > 0
+      ? Math.round((passedReports / analyzedReports.length) * 100)
+      : 0;
+    const totalErrors = reports.reduce((sum, r) => sum + (r.errorCount || 0), 0);
+    const avgErrors = analyzedReports.length > 0
+      ? Number((totalErrors / analyzedReports.length).toFixed(1))
+      : 0;
+
+    const current = { pass_rate: passRate, reports_submitted: totalReports, avg_errors_below: avgErrors };
+
+    res.json({ goals: team.goals || [], current });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/teams/my-team/goals — team leader creates a goal
+router.post('/my-team/goals', protect, authorize('team_leader'), async (req, res) => {
+  try {
+    const { title, type, target, deadline } = req.body;
+
+    if (!title || !type || target == null) {
+      return res.status(400).json({ message: 'title, type and target are required' });
+    }
+
+    const validTypes = ['pass_rate', 'reports_submitted', 'avg_errors_below'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ message: 'Invalid goal type' });
+    }
+
+    const team = await Team.findOne({ teamLead: req.user._id });
+    if (!team) return res.status(403).json({ message: 'You are not a team lead' });
+
+    team.goals.push({ title, type, target, deadline: deadline || null });
+    await team.save();
+
+    res.status(201).json(team.goals[team.goals.length - 1]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/teams/my-team/goals/:goalId — team leader deletes a goal
+router.delete('/my-team/goals/:goalId', protect, authorize('team_leader'), async (req, res) => {
+  try {
+    const team = await Team.findOne({ teamLead: req.user._id });
+    if (!team) return res.status(403).json({ message: 'You are not a team lead' });
+
+    const goal = team.goals.id(req.params.goalId);
+    if (!goal) return res.status(404).json({ message: 'Goal not found' });
+
+    goal.deleteOne();
+    await team.save();
+
+    res.json({ message: 'Goal deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
