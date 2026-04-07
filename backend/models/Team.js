@@ -24,6 +24,14 @@ const teamSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    announcements: [
+      {
+        title: { type: String, required: true, trim: true },
+        content: { type: String, required: true, trim: true },
+        createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
     goals: [
       {
         title: { type: String, required: true, trim: true },

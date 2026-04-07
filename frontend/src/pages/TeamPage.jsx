@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { Users, FileText, AlertTriangle, Clock, Target, Plus, Trash2, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, FileText, AlertTriangle, Clock, Target, Plus, Trash2, CheckCircle2, ChevronDown, ChevronUp, Megaphone, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -35,6 +35,16 @@ const TeamPage = () => {
   const [goalDeadline, setGoalDeadline] = useState('');
   const [savingGoal, setSavingGoal] = useState(false);
   const [goalError, setGoalError] = useState('');
+
+  // Announcements state
+  const [showAnnouncementsModal, setShowAnnouncementsModal] = useState(false);
+  const [announcements, setAnnouncements] = useState([]);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(false);
+  const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
+  const [annTitle, setAnnTitle] = useState('');
+  const [annContent, setAnnContent] = useState('');
+  const [savingAnnouncement, setSavingAnnouncement] = useState(false);
+  const [annError, setAnnError] = useState('');
 
   const isTeamLead = user?.role === 'team_leader';
 
@@ -131,6 +141,65 @@ const TeamPage = () => {
     }
   };
 
+  const handleOpenAnnouncements = async () => {
+    setShowAnnouncementsModal(true);
+    setShowCreateAnnouncement(false);
+    setAnnError('');
+    setAnnouncementsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('/api/teams/my-team/announcements', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAnnouncements(res.data);
+    } catch (err) {
+      setAnnError('Failed to load announcements');
+    } finally {
+      setAnnouncementsLoading(false);
+    }
+  };
+
+  const handleCreateAnnouncement = async (e) => {
+    e.preventDefault();
+    setAnnError('');
+    if (!annTitle.trim() || !annContent.trim()) {
+      setAnnError('Title and content are required.');
+      return;
+    }
+    setSavingAnnouncement(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post('/api/teams/my-team/announcements',
+        { title: annTitle.trim(), content: annContent.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setAnnouncements(prev => [res.data, ...prev]);
+      setAnnTitle('');
+      setAnnContent('');
+      setShowCreateAnnouncement(false);
+    } catch (err) {
+      setAnnError(err.response?.data?.message || 'Failed to create announcement');
+    } finally {
+      setSavingAnnouncement(false);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id) => {
+    if (!window.confirm('Delete this announcement?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`/api/teams/my-team/announcements/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAnnouncements(prev => prev.filter(a => a._id !== id));
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete announcement');
+    }
+  };
+
+  const formatAnnDate = (date) =>
+    new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
   const handleAddGoal = async (e) => {
     e.preventDefault();
     setGoalError('');
@@ -216,6 +285,14 @@ const TeamPage = () => {
                 >
                   {showMembers ? 'Hide Members' : 'View Members'}
                   <span className={`transition-transform ${showMembers ? 'rotate-180' : ''}`}>▼</span>
+                </button>
+
+                <button
+                  onClick={handleOpenAnnouncements}
+                  className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                >
+                  <Megaphone className="w-4 h-4" />
+                  View Announcements
                 </button>
 
                 {isTeamLead && (
@@ -366,6 +443,120 @@ const TeamPage = () => {
                 )
               )}
             </div>
+
+            {/* Announcements Modal */}
+            {showAnnouncementsModal && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[85vh] flex flex-col">
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                    <div className="flex items-center gap-2">
+                      <Megaphone className="w-5 h-5 text-indigo-600" />
+                      <h3 className="text-lg font-semibold text-gray-900">Team Announcements</h3>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {isTeamLead && !showCreateAnnouncement && (
+                        <button
+                          onClick={() => { setShowCreateAnnouncement(true); setAnnError(''); }}
+                          className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                        >
+                          <Plus className="w-4 h-4" />
+                          New Announcement
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setShowAnnouncementsModal(false); setShowCreateAnnouncement(false); setAnnError(''); }}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                    {/* Create form — team lead only */}
+                    {showCreateAnnouncement && (
+                      <form onSubmit={handleCreateAnnouncement} className="border border-indigo-200 bg-indigo-50 rounded-xl p-4 space-y-3">
+                        <h4 className="text-sm font-semibold text-indigo-800">New Announcement</h4>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Title <span className="text-red-500">*</span></label>
+                          <input
+                            type="text"
+                            value={annTitle}
+                            onChange={e => setAnnTitle(e.target.value)}
+                            placeholder="e.g. Q2 performance update"
+                            maxLength={100}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Content <span className="text-red-500">*</span></label>
+                          <textarea
+                            value={annContent}
+                            onChange={e => setAnnContent(e.target.value)}
+                            placeholder="Write your announcement here..."
+                            rows={4}
+                            maxLength={1000}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                          <p className="text-xs text-gray-400 text-right mt-0.5">{annContent.length}/1000</p>
+                        </div>
+                        {annError && <p className="text-sm text-red-600">{annError}</p>}
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setShowCreateAnnouncement(false); setAnnError(''); setAnnTitle(''); setAnnContent(''); }}
+                            className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={savingAnnouncement}
+                            className="px-5 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                          >
+                            {savingAnnouncement ? 'Posting...' : 'Post'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {/* Announcement list */}
+                    {announcementsLoading ? (
+                      <p className="text-center text-gray-400 text-sm py-8 animate-pulse">Loading announcements...</p>
+                    ) : announcements.length === 0 ? (
+                      <div className="text-center py-12 text-gray-400">
+                        <Megaphone className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">No announcements yet{isTeamLead ? ' — create the first one above.' : '.'}</p>
+                      </div>
+                    ) : (
+                      announcements.map(ann => (
+                        <div key={ann._id} className="border border-gray-200 rounded-xl p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-semibold text-gray-900">{ann.title}</h4>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                Posted by {ann.createdBy?.name || 'Team Leader'} · {formatAnnDate(ann.createdAt)}
+                              </p>
+                              <p className="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{ann.content}</p>
+                            </div>
+                            {isTeamLead && (
+                              <button
+                                onClick={() => handleDeleteAnnouncement(ann._id)}
+                                className="text-red-400 hover:text-red-600 flex-shrink-0"
+                                title="Delete announcement"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Add Goal Modal — team lead only */}
             {showAddGoal && (
