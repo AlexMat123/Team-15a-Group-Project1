@@ -179,4 +179,167 @@ router.get('/my-team/stats', protect, authorize('team_leader'), async (req, res)
   }
 });
 
+// GET /api/teams/my-team/announcements — all team members can view
+router.get('/my-team/announcements', protect, async (req, res) => {
+  try {
+    const team = await Team.findOne({ members: req.user._id })
+      .populate('announcements.createdBy', 'name')
+      .lean();
+    if (!team) return res.status(404).json({ message: 'You are not part of any team' });
+
+    const userId = req.user._id.toString();
+    const sorted = (team.announcements || [])
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .map(ann => ({
+        ...ann,
+        readByMe: (ann.readBy || []).some(id => id.toString() === userId),
+      }));
+
+    res.json(sorted);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/teams/my-team/announcements — team leader only
+router.post('/my-team/announcements', protect, authorize('team_leader'), async (req, res) => {
+  try {
+    const { title, content } = req.body;
+    if (!title?.trim() || !content?.trim()) {
+      return res.status(400).json({ message: 'Title and content are required' });
+    }
+
+    const team = await Team.findOne({ teamLead: req.user._id });
+    if (!team) return res.status(403).json({ message: 'You are not a team lead' });
+
+    team.announcements.push({ title: title.trim(), content: content.trim(), createdBy: req.user._id });
+    await team.save();
+
+    const saved = team.announcements[team.announcements.length - 1];
+    res.status(201).json({
+      ...saved.toObject(),
+      createdBy: { _id: req.user._id, name: req.user.name },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/teams/my-team/announcements/:announcementId — team leader only
+router.delete('/my-team/announcements/:announcementId', protect, authorize('team_leader'), async (req, res) => {
+  try {
+    const team = await Team.findOne({ teamLead: req.user._id });
+    if (!team) return res.status(403).json({ message: 'You are not a team lead' });
+
+    const announcement = team.announcements.id(req.params.announcementId);
+    if (!announcement) return res.status(404).json({ message: 'Announcement not found' });
+
+    announcement.deleteOne();
+    await team.save();
+    res.json({ message: 'Announcement deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/teams/my-team/announcements/:announcementId/read — mark as read for current user
+router.patch('/my-team/announcements/:announcementId/read', protect, async (req, res) => {
+  try {
+    const team = await Team.findOne({ members: req.user._id });
+    if (!team) return res.status(404).json({ message: 'You are not part of any team' });
+
+    const announcement = team.announcements.id(req.params.announcementId);
+    if (!announcement) return res.status(404).json({ message: 'Announcement not found' });
+
+    const alreadyRead = announcement.readBy.some(id => id.toString() === req.user._id.toString());
+    if (!alreadyRead) {
+      announcement.readBy.push(req.user._id);
+      await team.save();
+    }
+
+    res.json({ message: 'Marked as read' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/teams/my-team/goals — all team members can view goals + current progress
+router.get('/my-team/goals', protect, async (req, res) => {
+  try {
+    const team = await Team.findOne({ members: req.user._id });
+    if (!team) return res.status(404).json({ message: 'You are not part of any team' });
+
+    const memberIds = team.members.map(m => m.toString());
+    const allReports = await Report.find({ analyzedBy: { $in: memberIds } });
+
+    // Filter by join date
+    const reports = allReports.filter(r => {
+      const joinDate = team.memberJoinDates?.get(r.analyzedBy.toString());
+      if (!joinDate) return true;
+      return new Date(r.createdAt) >= new Date(joinDate);
+    });
+
+    const totalReports = reports.length;
+    const analyzedReports = reports.filter(r => r.status === 'analyzed');
+    const passedReports = analyzedReports.filter(r => r.qualityAssessment?.label === 'good').length;
+    const passRate = analyzedReports.length > 0
+      ? Math.round((passedReports / analyzedReports.length) * 100)
+      : 0;
+    const totalErrors = reports.reduce((sum, r) => sum + (r.errorCount || 0), 0);
+    const avgErrors = analyzedReports.length > 0
+      ? Number((totalErrors / analyzedReports.length).toFixed(1))
+      : 0;
+
+    const current = { pass_rate: passRate, reports_submitted: totalReports, avg_errors_below: avgErrors };
+
+    res.json({ goals: team.goals || [], current });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/teams/my-team/goals — team leader creates a goal
+router.post('/my-team/goals', protect, authorize('team_leader'), async (req, res) => {
+  try {
+    const { title, type, target, deadline } = req.body;
+
+    if (!title || !type || target == null) {
+      return res.status(400).json({ message: 'title, type and target are required' });
+    }
+
+    const validTypes = ['pass_rate', 'reports_submitted', 'avg_errors_below'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ message: 'Invalid goal type' });
+    }
+
+    const team = await Team.findOne({ teamLead: req.user._id });
+    if (!team) return res.status(403).json({ message: 'You are not a team lead' });
+
+    team.goals.push({ title, type, target, deadline: deadline || null });
+    await team.save();
+
+    res.status(201).json(team.goals[team.goals.length - 1]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/teams/my-team/goals/:goalId — team leader deletes a goal
+router.delete('/my-team/goals/:goalId', protect, authorize('team_leader'), async (req, res) => {
+  try {
+    const team = await Team.findOne({ teamLead: req.user._id });
+    if (!team) return res.status(403).json({ message: 'You are not a team lead' });
+
+    const goal = team.goals.id(req.params.goalId);
+    if (!goal) return res.status(404).json({ message: 'Goal not found' });
+
+    goal.deleteOne();
+    await team.save();
+
+    res.json({ message: 'Goal deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
