@@ -2,6 +2,7 @@ const Report = require('../models/Report');
 const TrainingExample = require('../models/TrainingExample');
 const mlService = require('./mlService');
 const { processDocument } = require('./pdfService');
+const { analyseTemplate } = require('./templateProcessor');
 
 const MIN_TEXT_LENGTH = 200;
 const MAX_GOOD_REFERENCE_ERRORS = 12;
@@ -348,15 +349,32 @@ const processTrainingExample = async (exampleId) => {
     }
 
     example.extractedText = text.substring(0, 20000);
-    example.metadata = {
-      pageCount: pdfResult.pageCount || 0,
-      sections: pdfResult.sections?.map((s) => s.title) || [],
-      documentType: 'training-upload',
-    };
 
-    const embedding = await mlService.getEmbedding(normalizeTextForEmbedding(text));
-    if (embedding && embedding.length) {
-      example.embedding = embedding;
+    if (example.type === 'template') {
+      // Run the template structural analyser instead of the generic metadata
+      const templateMeta = analyseTemplate(text, {
+        pageCount: pdfResult.numPages || pdfResult.pageCount || 0,
+        sections: pdfResult.sections || [],
+        headerFields: pdfResult.headerFields || {},
+      });
+      example.metadata = templateMeta;
+
+      // Still generate an embedding so similarity comparison is possible
+      const embedding = await mlService.getEmbedding(normalizeTextForEmbedding(text));
+      if (embedding && embedding.length) {
+        example.embedding = embedding;
+      }
+    } else {
+      example.metadata = {
+        pageCount: pdfResult.numPages || pdfResult.pageCount || 0,
+        sections: pdfResult.sections?.map((s) => s.title) || [],
+        documentType: 'training-upload',
+      };
+
+      const embedding = await mlService.getEmbedding(normalizeTextForEmbedding(text));
+      if (embedding && embedding.length) {
+        example.embedding = embedding;
+      }
     }
 
     example.status = 'trained';
