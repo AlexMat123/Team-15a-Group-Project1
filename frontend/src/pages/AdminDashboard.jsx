@@ -1966,7 +1966,7 @@ const AdminDashboard = () => {
         {activeTab === 'training' && (
           <section>
             {/* Training Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
               <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-4">
                 <p className="text-2xl font-bold text-green-600">{trainingStats.goodExamples}</p>
                 <p className="text-sm text-gray-500">Good Examples</p>
@@ -1983,11 +1983,18 @@ const AdminDashboard = () => {
                 <p className="text-2xl font-bold text-amber-500">{trainingStats.pendingExamples}</p>
                 <p className="text-sm text-gray-500">Pending</p>
               </div>
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-4">
+                <p className="text-2xl font-bold text-indigo-600">{trainingStats.templates ?? 0}</p>
+                <p className="text-sm text-gray-500">Templates</p>
+              </div>
             </div>
 
             {/* Upload Section */}
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Upload Training Example</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Upload Training Example</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Upload a <span className="text-green-600 font-medium">good</span> or <span className="text-red-500 font-medium">bad</span> example to train the AI quality model, or upload a <span className="text-indigo-600 font-medium">Report Template</span> to teach the system what a completed report should look like.
+              </p>
               <form onSubmit={handleTrainingUpload}>
                 <div
                   className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition ${
@@ -2026,7 +2033,7 @@ const AdminDashboard = () => {
                 </div>
 
                 <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 flex-wrap">
                     <label className="text-sm font-medium text-gray-700">Type:</label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -2049,6 +2056,17 @@ const AdminDashboard = () => {
                         className="text-red-500 focus:ring-red-500"
                       />
                       <span className="text-sm text-red-500 font-medium">Bad Example</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="trainingType"
+                        value="template"
+                        checked={trainingType === 'template'}
+                        onChange={(e) => setTrainingType(e.target.value)}
+                        className="text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-indigo-600 font-medium">Report Template</span>
                     </label>
                   </div>
                   <button
@@ -2121,10 +2139,12 @@ const AdminDashboard = () => {
                                   ? 'bg-green-100 text-green-700'
                                   : example.type === 'bad'
                                   ? 'bg-red-100 text-red-700'
+                                  : example.type === 'template'
+                                  ? 'bg-indigo-100 text-indigo-700'
                                   : 'bg-gray-100 text-gray-700'
                               }`}
                             >
-                              {example.type}
+                              {example.type === 'template' ? 'Report Template' : example.type}
                             </span>
                           </td>
                           <td className="px-4 py-4">
