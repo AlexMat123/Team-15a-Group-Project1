@@ -389,9 +389,16 @@ const processTrainingExample = async (exampleId) => {
   }
 };
 
+const getActiveTemplate = async () => {
+  return TrainingExample.findOne({ type: 'template', isActive: true, status: 'trained' })
+    .select('filename metadata embedding extractedText trainedAt')
+    .lean();
+};
+
 module.exports = {
   buildTrainingExamplesFromLabeledReports,
   predictQualityFromTraining,
   applyContextAwareErrorRescoring,
   processTrainingExample,
+  getActiveTemplate,
 };
