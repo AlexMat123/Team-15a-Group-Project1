@@ -87,6 +87,51 @@ router.get('/stats', protect, authorize('admin'), async (req, res) => {
   }
 });
 
+const getAdminAnalyticsScopeConfig = (range) => {
+  const now = new Date();
+
+  if (range === 'all') {
+    return {
+      range: 'all',
+      startDate: null,
+      bucketCount: 0,
+      getBucketDate: () => null,
+      getBucketKey: (date) =>
+        `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,
+      formatBucketLabel: (date) =>
+        new Intl.DateTimeFormat('en-GB', {
+          month: 'short',
+          year: 'numeric',
+          timeZone: 'UTC',
+        }).format(date),
+    };
+  }
+
+  const parsedDays = parseInt(range, 10);
+  const safeDays = !isNaN(parsedDays) && parsedDays > 0 ? parsedDays : 30;
+  const startDate = new Date(now);
+  startDate.setUTCDate(now.getUTCDate() - (safeDays - 1));
+  startDate.setUTCHours(0, 0, 0, 0);
+
+  return {
+    range: String(safeDays),
+    startDate,
+    bucketCount: safeDays,
+    getBucketDate: (offset) => {
+      const bucketDate = new Date(startDate);
+      bucketDate.setUTCDate(startDate.getUTCDate() + offset);
+      return bucketDate;
+    },
+    getBucketKey: (date) => date.toISOString().slice(0, 10),
+    formatBucketLabel: (date) =>
+      new Intl.DateTimeFormat('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        timeZone: 'UTC',
+      }).format(date),
+  };
+};
+
 // GET /api/admin/analytics?level=company|team|user&teamId=xxx&userId=xxx&range=7|30|90|all
 router.get('/analytics', protect, authorize('admin'), async (req, res) => {
   try {
@@ -95,12 +140,10 @@ router.get('/analytics', protect, authorize('admin'), async (req, res) => {
     const filter = {};
     let scopeLabel = 'Company-wide';
     let scopeDetails = null;
+    const scopeConfig = getAdminAnalyticsScopeConfig(range);
 
-    if (range && range !== 'all') {
-      const days = parseInt(range);
-      if (!isNaN(days) && days > 0) {
-        filter.createdAt = { $gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) };
-      }
+    if (scopeConfig.startDate) {
+      filter.createdAt = { $gte: scopeConfig.startDate };
     }
 
     if (level === 'team' && teamId) {
@@ -146,27 +189,51 @@ router.get('/analytics', protect, authorize('admin'), async (req, res) => {
 
     const qualityBreakdown = { good: 0, bad: 0, uncertain: 0 };
     const checklistFailureCounts = new Map();
-
-    const now = new Date();
-    const days = range === 'all' ? 365 : parseInt(range) || 30;
-    const bucketCount = Math.min(days, 12);
-    const bucketSizeDays = Math.ceil(days / bucketCount);
+    const errorTypesByReport = {
+      placeholder: 0,
+      consistency: 0,
+      compliance: 0,
+      formatting: 0,
+      missing_data: 0,
+    };
 
     const trendBuckets = new Map();
-    for (let i = 0; i < bucketCount; i++) {
-      const bucketEnd = new Date(now.getTime() - i * bucketSizeDays * 24 * 60 * 60 * 1000);
-      const bucketStart = new Date(bucketEnd.getTime() - bucketSizeDays * 24 * 60 * 60 * 1000);
-      const key = bucketEnd.toISOString().slice(0, 10);
+    const bucketDates = [];
+
+    if (scopeConfig.range === 'all') {
+      const now = new Date();
+      const oldestReportDate = reports.length
+        ? new Date(reports[reports.length - 1].createdAt)
+        : now;
+      const firstBucketDate = new Date(
+        Date.UTC(oldestReportDate.getUTCFullYear(), oldestReportDate.getUTCMonth(), 1)
+      );
+      const lastBucketDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+      for (
+        let bucketDate = new Date(firstBucketDate);
+        bucketDate <= lastBucketDate;
+        bucketDate = new Date(Date.UTC(bucketDate.getUTCFullYear(), bucketDate.getUTCMonth() + 1, 1))
+      ) {
+        bucketDates.push(bucketDate);
+      }
+    } else {
+      for (let offset = 0; offset < scopeConfig.bucketCount; offset += 1) {
+        bucketDates.push(scopeConfig.getBucketDate(offset));
+      }
+    }
+
+    bucketDates.forEach((bucketDate) => {
+      const key = scopeConfig.getBucketKey(bucketDate);
       trendBuckets.set(key, {
-        periodLabel: bucketEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-        periodStart: bucketStart,
-        periodEnd: bucketEnd,
+        periodLabel: scopeConfig.formatBucketLabel(bucketDate),
         reportCount: 0,
         errorCount: 0,
+        analyzedCount: 0,
         passedCount: 0,
         failedCount: 0,
       });
-    }
+    });
 
     const userStats = new Map();
 
@@ -187,6 +254,11 @@ router.get('/analytics', protect, authorize('admin'), async (req, res) => {
       errorBreakdown.compliance += report.errorSummary?.compliance || 0;
       errorBreakdown.formatting += report.errorSummary?.formatting || 0;
       errorBreakdown.missing_data += report.errorSummary?.missing_data || 0;
+      if ((report.errorSummary?.placeholder || 0) > 0) errorTypesByReport.placeholder += 1;
+      if ((report.errorSummary?.consistency || 0) > 0) errorTypesByReport.consistency += 1;
+      if ((report.errorSummary?.compliance || 0) > 0) errorTypesByReport.compliance += 1;
+      if ((report.errorSummary?.formatting || 0) > 0) errorTypesByReport.formatting += 1;
+      if ((report.errorSummary?.missing_data || 0) > 0) errorTypesByReport.missing_data += 1;
 
       const qualityLabel = report.qualityAssessment?.label;
       if (qualityLabel && qualityBreakdown[qualityLabel] !== undefined) {
@@ -201,13 +273,15 @@ router.get('/analytics', protect, authorize('admin'), async (req, res) => {
       });
 
       const createdAt = new Date(report.createdAt);
-      for (const [key, bucket] of trendBuckets.entries()) {
-        if (createdAt <= bucket.periodEnd && createdAt > bucket.periodStart) {
-          bucket.reportCount += 1;
-          bucket.errorCount += report.errorCount || 0;
-          if (report.qualityAssessment?.label === 'good') bucket.passedCount += 1;
-          if (report.qualityAssessment?.label === 'bad') bucket.failedCount += 1;
-          break;
+      const bucketKey = scopeConfig.getBucketKey(createdAt);
+      const existingBucket = trendBuckets.get(bucketKey);
+      if (existingBucket) {
+        existingBucket.reportCount += 1;
+        existingBucket.errorCount += report.errorCount || 0;
+        if (report.status === 'analyzed') {
+          existingBucket.analyzedCount += 1;
+          if (report.qualityAssessment?.label === 'good') existingBucket.passedCount += 1;
+          if (report.qualityAssessment?.label === 'bad') existingBucket.failedCount += 1;
         }
       }
 
@@ -256,15 +330,56 @@ router.get('/analytics', protect, authorize('admin'), async (req, res) => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
+    const checklistFailureBreakdown = Array.from(checklistFailureCounts.entries())
+      .map(([message, count]) => ({ message, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    const mostCommonErrorTypes = Object.entries(errorBreakdown)
+      .map(([type, count]) => ({
+        type,
+        count,
+        reportsAffected: errorTypesByReport[type] || 0,
+      }))
+      .sort((a, b) => {
+        if (b.count !== a.count) {
+          return b.count - a.count;
+        }
+
+        return b.reportsAffected - a.reportsAffected;
+      });
+
+    const passFailRateTrends = Array.from(trendBuckets.values()).map((bucket) => ({
+      periodLabel: bucket.periodLabel,
+      analyzedCount: bucket.analyzedCount,
+      passedCount: bucket.passedCount,
+      failedCount: bucket.failedCount,
+      passRate:
+        bucket.analyzedCount > 0
+          ? Number(((bucket.passedCount / bucket.analyzedCount) * 100).toFixed(1))
+          : 0,
+    }));
+
+    const qualityScoreTrend = reports
+      .filter((report) => report.status === 'analyzed')
+      .map((report) => ({
+        _id: report._id,
+        filename: report.filename,
+        createdAt: report.createdAt,
+        qualityLabel: report.qualityAssessment?.label || null,
+        qualityScore: Number(((report.qualityAssessment?.goodScore || 0) * 100).toFixed(1)),
+      }))
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+      .slice(-10);
+
     const trendData = Array.from(trendBuckets.values())
-      .reverse()
       .map((bucket) => ({
         period: bucket.periodLabel,
         reports: bucket.reportCount,
         errors: bucket.errorCount,
         passed: bucket.passedCount,
         failed: bucket.failedCount,
-        passRate: bucket.reportCount > 0 ? Number(((bucket.passedCount / bucket.reportCount) * 100).toFixed(1)) : 0,
+        passRate: bucket.analyzedCount > 0 ? Number(((bucket.passedCount / bucket.analyzedCount) * 100).toFixed(1)) : 0,
       }));
 
     const userLeaderboard = Array.from(userStats.values())
@@ -300,6 +415,10 @@ router.get('/analytics', protect, authorize('admin'), async (req, res) => {
       errorBreakdown: errorBreakdownArray,
       qualityBreakdown,
       trendData,
+      passFailRateTrends,
+      qualityScoreTrend,
+      mostCommonErrorTypes,
+      checklistFailureBreakdown,
       topErrors,
       userLeaderboard,
       recentReports,

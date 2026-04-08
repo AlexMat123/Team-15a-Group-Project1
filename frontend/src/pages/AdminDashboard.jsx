@@ -540,6 +540,44 @@ const AdminDashboard = () => {
     formatting: 'Formatting', missing_data: 'Missing Data',
   };
   const errorTypeColors = ['#F97316', '#2563EB', '#DC2626', '#9333EA', '#16A34A'];
+  const adminPassRateChartData = analyticsData?.passFailRateTrends?.map((item, index) => ({
+    pointIndex: index,
+    periodKey: `${item.periodLabel}-${index}`,
+    periodLabel: item.periodLabel,
+    analyzedCount: Number(item.analyzedCount ?? 0),
+    passedCount: Number(item.passedCount ?? 0),
+    failedCount: Number(item.failedCount ?? 0),
+    passRate: Number(item.passRate ?? 0),
+  })) || [];
+  const adminPassRateLabelMap = Object.fromEntries(
+    adminPassRateChartData.map((item) => [item.periodKey, item.periodLabel])
+  );
+  const adminQualityScoreMaxValue = analyticsData?.qualityScoreTrend?.reduce(
+    (max, report) => Math.max(max, report.qualityScore || 0),
+    0
+  ) ?? 0;
+  const adminQualityScoreChartData = analyticsData?.qualityScoreTrend?.map((report, index) => ({
+    pointIndex: index,
+    pointKey: report._id || `${report.filename}-${index}`,
+    label: report.filename.length > 18 ? `${report.filename.slice(0, 18)}...` : report.filename,
+    fullLabel: report.filename,
+    score: Number(report.qualityScore ?? 0),
+    date: formatDate(report.createdAt),
+  })) || [];
+  const adminQualityScoreLabelMap = Object.fromEntries(
+    adminQualityScoreChartData.map((item) => [item.pointKey, item.label])
+  );
+  const adminCommonErrorTypeChartData = analyticsData?.mostCommonErrorTypes?.map((item, index) => ({
+    name: errorTypeLabelMap[item.type] || item.type,
+    errors: item.count,
+    reportsAffected: item.reportsAffected,
+    fill: errorTypeColors[index % errorTypeColors.length],
+  })) || [];
+  const adminChecklistFailureChartData = analyticsData?.checklistFailureBreakdown?.map((item) => ({
+    shortLabel: item.message.length > 28 ? `${item.message.slice(0, 28)}...` : item.message,
+    fullLabel: item.message,
+    count: item.count,
+  })) || [];
 
   const renderUserProfileStats = (analytics, loading) => {
     if (loading) {
@@ -1424,6 +1462,155 @@ const AdminDashboard = () => {
                     </ResponsiveContainer>
                   </div>
                 )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Pass Rate Over Time</h4>
+                    {adminPassRateChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart
+                          data={adminPassRateChartData}
+                          margin={{ top: 10, right: 20, left: 0, bottom: 10 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                          <XAxis
+                            type="number"
+                            dataKey="pointIndex"
+                            domain={['dataMin', 'dataMax']}
+                            allowDecimals={false}
+                            tick={{ fontSize: 10 }}
+                            minTickGap={12}
+                            tickFormatter={(value) => adminPassRateChartData[value]?.periodLabel || ''}
+                          />
+                          <YAxis domain={[0, 105]} tick={{ fontSize: 12 }} />
+                          <Tooltip
+                            formatter={(value, name) => {
+                              if (name === 'Pass Rate') return [`${value}%`, name];
+                              return [value, name];
+                            }}
+                            labelFormatter={(label, payload) => {
+                              const point = payload?.[0]?.payload;
+                              if (!point) return label;
+                              return `${point.periodLabel} - ${point.passedCount}/${point.analyzedCount} passed`;
+                            }}
+                          />
+                          <Line
+                            type="linear"
+                            dataKey="passRate"
+                            name="Pass Rate"
+                            stroke="#10b981"
+                            strokeWidth={3}
+                            isAnimationActive={false}
+                            connectNulls
+                            dot={false}
+                            activeDot={{ r: 6 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">
+                        No pass rate trend available yet.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Quality Score Trend</h4>
+                    {adminQualityScoreChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart
+                          data={adminQualityScoreChartData}
+                          margin={{ top: 10, right: 20, left: 0, bottom: 10 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                          <XAxis
+                            type="number"
+                            dataKey="pointIndex"
+                            domain={['dataMin', 'dataMax']}
+                            allowDecimals={false}
+                            tick={{ fontSize: 10 }}
+                            minTickGap={12}
+                            tickFormatter={(value) => adminQualityScoreChartData[value]?.label || ''}
+                          />
+                          <YAxis domain={[0, Math.max(adminQualityScoreMaxValue, 105)]} tick={{ fontSize: 12 }} />
+                          <Tooltip
+                            formatter={(value) => [`${value}`, 'Quality Score']}
+                            labelFormatter={(label, payload) => {
+                              const point = payload?.[0]?.payload;
+                              return point ? `${point.fullLabel} - ${point.date}` : label;
+                            }}
+                          />
+                          <Line
+                            type="linear"
+                            dataKey="score"
+                            name="Quality Score"
+                            stroke="#6366f1"
+                            strokeWidth={3}
+                            isAnimationActive={false}
+                            connectNulls
+                            dot={false}
+                            activeDot={{ r: 6 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">
+                        No quality score trend available yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Most Common Error Types</h4>
+                    {adminCommonErrorTypeChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={adminCommonErrorTypeChartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                          <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                          <YAxis />
+                          <Tooltip formatter={(value) => [`${value}`, 'Errors']} />
+                          <Bar dataKey="errors" name="Errors" radius={[6, 6, 0, 0]}>
+                            {adminCommonErrorTypeChartData.map((entry) => (
+                              <Cell key={entry.name} fill={entry.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">
+                        No common error type data available yet.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Recurring Checklist Failures</h4>
+                    {adminChecklistFailureChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart
+                          data={adminChecklistFailureChartData}
+                          layout="vertical"
+                          margin={{ top: 10, right: 20, left: 20, bottom: 0 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                          <XAxis type="number" tick={{ fontSize: 12 }} />
+                          <YAxis dataKey="shortLabel" type="category" tick={{ fontSize: 11 }} width={70} />
+                          <Tooltip
+                            formatter={(value) => [`${value}`, 'Occurrences']}
+                            labelFormatter={(label, payload) => payload?.[0]?.payload?.fullLabel || label}
+                          />
+                          <Bar dataKey="count" fill="#6366f1" radius={[0, 6, 6, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">
+                        No recurring checklist failures found.
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 {/* Time Savings */}
                 <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
