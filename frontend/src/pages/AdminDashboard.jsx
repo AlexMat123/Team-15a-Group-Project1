@@ -180,6 +180,7 @@ const AdminDashboard = () => {
   const [trainingError, setTrainingError] = useState('');
   const [syncingTraining, setSyncingTraining] = useState(false);
   const [deletingExampleId, setDeletingExampleId] = useState('');
+  const [activatingTemplateId, setActivatingTemplateId] = useState('');
   const [dragActive, setDragActive] = useState(false);
 
   // --- Analytics state ---
@@ -407,6 +408,22 @@ const AdminDashboard = () => {
       setTrainingError(error.response?.data?.message || 'Failed to upload training example');
     } finally {
       setUploadingTraining(false);
+    }
+  };
+
+  const handleActivateTemplate = async (exampleId) => {
+    setActivatingTemplateId(exampleId);
+    setTrainingMessage('');
+    setTrainingError('');
+
+    try {
+      const response = await api.patch(`/admin/training/examples/${exampleId}/activate`);
+      setTrainingMessage(response.data.message || 'Template activated');
+      await fetchTrainingData();
+    } catch (error) {
+      setTrainingError(error.response?.data?.message || 'Failed to activate template');
+    } finally {
+      setActivatingTemplateId('');
     }
   };
 
@@ -2139,7 +2156,7 @@ const AdminDashboard = () => {
         {activeTab === 'training' && (
           <section>
             {/* Training Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
               <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-4">
                 <p className="text-2xl font-bold text-green-600">{trainingStats.goodExamples}</p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Good Examples</p>
@@ -2156,11 +2173,18 @@ const AdminDashboard = () => {
                 <p className="text-2xl font-bold text-amber-500">{trainingStats.pendingExamples}</p>
                 <p className="text-sm text-gray-500 dark:text-gray-400 ">Pending</p>
               </div>
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-4">
+                <p className="text-2xl font-bold text-indigo-600">{trainingStats.templates ?? 0}</p>
+                <p className="text-sm text-gray-500">Templates</p>
+              </div>
             </div>
 
             {/* Upload Section */}
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Upload Training Example</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Upload Training Example</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Upload a <span className="text-green-600 font-medium">good</span> or <span className="text-red-500 font-medium">bad</span> example to train the AI quality model, or upload a <span className="text-indigo-600 font-medium">Report Template</span> to teach the system what a completed report should look like.
+              </p>
               <form onSubmit={handleTrainingUpload}>
                 <div
                   className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition ${
@@ -2223,6 +2247,17 @@ const AdminDashboard = () => {
                       />
                       <span className="text-sm text-red-500 font-medium">Bad Example</span>
                     </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="trainingType"
+                        value="template"
+                        checked={trainingType === 'template'}
+                        onChange={(e) => setTrainingType(e.target.value)}
+                        className="text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-indigo-600 font-medium">Report Template</span>
+                    </label>
                   </div>
                   <button
                     type="submit"
@@ -2280,11 +2315,19 @@ const AdminDashboard = () => {
                     </thead>
                     <tbody>
                       {trainingExamples.map((example) => (
-                        <tr key={example._id} className="border-b border-gray-100 last:border-b-0">
-                          <td className="px-4 py-4 text-gray-900">
+                        <tr
+                          key={example._id}
+                          className={`border-b border-gray-100 dark:border-gray-800 last:border-b-0 ${example.isActive ? 'bg-green-50 dark:bg-green-900/10' : ''}`}
+                        >
+                          <td className="px-4 py-4 text-gray-900 dark:text-white">
                             <div className="flex items-center gap-2">
                               <FileText className="w-4 h-4 text-gray-400" />
                               <span className="truncate max-w-[200px]">{example.filename}</span>
+                              {example.isActive && (
+                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 rounded-full px-2 py-0.5">
+                                  <CheckCircle className="w-3 h-3" /> Active
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-4">
@@ -2294,10 +2337,12 @@ const AdminDashboard = () => {
                                   ? 'bg-green-100 text-green-700'
                                   : example.type === 'bad'
                                   ? 'bg-red-100 text-red-700'
+                                  : example.type === 'template'
+                                  ? 'bg-indigo-100 text-indigo-700'
                                   : 'bg-gray-100 text-gray-700'
                               }`}
                             >
-                              {example.type}
+                              {example.type === 'template' ? 'Report Template' : example.type}
                             </span>
                           </td>
                           <td className="px-4 py-4">
@@ -2319,14 +2364,26 @@ const AdminDashboard = () => {
                             {formatDate(example.createdAt)}
                           </td>
                           <td className="px-4 py-4">
-                            <button
-                              onClick={() => handleDeleteTrainingExample(example._id)}
-                              disabled={deletingExampleId === example._id}
-                              className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 disabled:opacity-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              {deletingExampleId === example._id ? 'Deleting...' : 'Delete'}
-                            </button>
+                            <div className="flex items-center gap-3">
+                              {example.type === 'template' && !example.isActive && example.status === 'trained' && (
+                                <button
+                                  onClick={() => handleActivateTemplate(example._id)}
+                                  disabled={activatingTemplateId === example._id}
+                                  className="inline-flex items-center gap-1 text-green-600 hover:text-green-800 disabled:opacity-50 text-sm font-medium"
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                  {activatingTemplateId === example._id ? 'Activating...' : 'Set as Active'}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteTrainingExample(example._id)}
+                                disabled={deletingExampleId === example._id}
+                                className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 disabled:opacity-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                {deletingExampleId === example._id ? 'Deleting...' : 'Delete'}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
