@@ -596,6 +596,129 @@ const AdminDashboard = () => {
     fullLabel: item.message,
     count: item.count,
   })) || [];
+  const analyticsComparisonActive = Boolean(analyticsData?.comparisonMode);
+  const comparisonPrimaryScope = analyticsData?.primaryScope || null;
+  const comparisonSecondaryScope = analyticsData?.secondaryScope || null;
+  const comparisonColours = {
+    primary: '#6366f1',
+    secondary: '#10b981',
+  };
+
+  const buildMergedPeriodSeries = (primary = [], secondary = [], valueKey) => {
+    const merged = new Map();
+
+    primary.forEach((item) => {
+      const key = item.periodKey || item.periodLabel || item.period;
+      merged.set(key, {
+        periodKey: key,
+        periodLabel: item.periodLabel || item.period || key,
+        primaryValue: Number(item[valueKey] ?? 0),
+        secondaryValue: null,
+      });
+    });
+
+    secondary.forEach((item) => {
+      const key = item.periodKey || item.periodLabel || item.period;
+      if (!merged.has(key)) {
+        merged.set(key, {
+          periodKey: key,
+          periodLabel: item.periodLabel || item.period || key,
+          primaryValue: null,
+          secondaryValue: null,
+        });
+      }
+      merged.get(key).secondaryValue = Number(item[valueKey] ?? 0);
+    });
+
+    return Array.from(merged.values()).map((item, index) => ({
+      ...item,
+      pointIndex: index,
+    }));
+  };
+
+  const buildMergedErrorTypeSeries = (primary = [], secondary = []) => {
+    const merged = new Map();
+
+    primary.forEach((item) => {
+      merged.set(item.name, {
+        name: item.name,
+        primaryValue: Number(item.value ?? item.errors ?? 0),
+        secondaryValue: 0,
+      });
+    });
+
+    secondary.forEach((item) => {
+      if (!merged.has(item.name)) {
+        merged.set(item.name, {
+          name: item.name,
+          primaryValue: 0,
+          secondaryValue: 0,
+        });
+      }
+      merged.get(item.name).secondaryValue = Number(item.value ?? item.errors ?? 0);
+    });
+
+    return Array.from(merged.values());
+  };
+
+  const buildMergedQualityScoreSeries = (primary = [], secondary = []) => {
+    const maxLength = Math.max(primary.length, secondary.length);
+
+    return Array.from({ length: maxLength }, (_, index) => {
+      const primaryItem = primary[index];
+      const secondaryItem = secondary[index];
+
+      return {
+        pointIndex: index,
+        pointLabel: `Report ${index + 1}`,
+        primaryDate: primaryItem?.createdAt ? formatDate(primaryItem.createdAt) : null,
+        secondaryDate: secondaryItem?.createdAt ? formatDate(secondaryItem.createdAt) : null,
+        primaryValue: primaryItem ? Number(primaryItem.qualityScore ?? 0) : null,
+        secondaryValue: secondaryItem ? Number(secondaryItem.qualityScore ?? 0) : null,
+      };
+    });
+  };
+
+  const comparisonReportsChartData = analyticsComparisonActive
+    ? buildMergedPeriodSeries(
+        comparisonPrimaryScope?.trendData,
+        comparisonSecondaryScope?.trendData,
+        'reports'
+      )
+    : [];
+  const comparisonPassRateChartData = analyticsComparisonActive
+    ? buildMergedPeriodSeries(
+        comparisonPrimaryScope?.passFailRateTrends,
+        comparisonSecondaryScope?.passFailRateTrends,
+        'passRate'
+      )
+    : [];
+  const comparisonErrorTypeChartData = analyticsComparisonActive
+    ? buildMergedErrorTypeSeries(
+        comparisonPrimaryScope?.errorBreakdown,
+        comparisonSecondaryScope?.errorBreakdown
+      )
+    : [];
+  const comparisonQualityScoreChartData = analyticsComparisonActive
+    ? buildMergedQualityScoreSeries(
+        comparisonPrimaryScope?.qualityScoreTrend,
+        comparisonSecondaryScope?.qualityScoreTrend
+      )
+    : [];
+  const comparisonQualityScoreMaxValue = comparisonQualityScoreChartData.reduce(
+    (max, item) => Math.max(max, item.primaryValue ?? 0, item.secondaryValue ?? 0),
+    0
+  );
+  const comparisonSummaryCards = analyticsComparisonActive
+    ? [
+        ['Total Reports', comparisonPrimaryScope?.summary?.totalReports ?? 0, comparisonSecondaryScope?.summary?.totalReports ?? 0],
+        ['Analysed', comparisonPrimaryScope?.summary?.analyzedReports ?? 0, comparisonSecondaryScope?.summary?.analyzedReports ?? 0],
+        ['Total Errors', comparisonPrimaryScope?.summary?.totalErrors ?? 0, comparisonSecondaryScope?.summary?.totalErrors ?? 0],
+        ['Avg Errors/Report', comparisonPrimaryScope?.summary?.averageErrorsPerReport ?? 0, comparisonSecondaryScope?.summary?.averageErrorsPerReport ?? 0],
+        ['Pass Rate', `${comparisonPrimaryScope?.summary?.passRate ?? 0}%`, `${comparisonSecondaryScope?.summary?.passRate ?? 0}%`],
+        ['Time Saved', `${comparisonPrimaryScope?.summary?.totalTimeSaved ?? 0}h`, `${comparisonSecondaryScope?.summary?.totalTimeSaved ?? 0}h`],
+      ]
+    : [];
 
   const renderUserProfileStats = (analytics, loading) => {
     if (loading) {
@@ -1458,36 +1581,206 @@ const AdminDashboard = () => {
               </div>
             ) : analyticsData ? (
               <>
-                {analyticsData.comparisonMode ? (
-                  <div className="bg-white rounded-xl shadow-sm p-6">
-                    <h3 className="text-xl font-bold text-gray-900">Comparison Data Loaded</h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {analyticsRange === 'all' ? 'All time' : `Last ${analyticsRange} days`}
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                      <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Primary</p>
-                        <p className="text-sm font-semibold text-gray-900 mt-2">
-                          {analyticsData.primaryScope?.scopeLabel || 'Not available'}
-                        </p>
-                        <p className="text-xs text-gray-600 mt-1">
-                          Total reports: {analyticsData.primaryScope?.summary?.totalReports ?? 0}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Secondary</p>
-                        <p className="text-sm font-semibold text-gray-900 mt-2">
-                          {analyticsData.secondaryScope?.scopeLabel || 'Not available'}
-                        </p>
-                        <p className="text-xs text-gray-600 mt-1">
-                          Total reports: {analyticsData.secondaryScope?.summary?.totalReports ?? 0}
-                        </p>
+                {analyticsComparisonActive ? (
+                  <>
+                    <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900">Analytics Comparison</h3>
+                          <p className="text-sm text-gray-500">
+                            {analyticsRange === 'all' ? 'All time' : `Last ${analyticsRange} days`}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full lg:w-auto">
+                          <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Primary</p>
+                            <p className="text-sm font-semibold text-gray-900 mt-1">{comparisonPrimaryScope?.scopeLabel}</p>
+                            {comparisonPrimaryScope?.scopeDetails?.teamName && (
+                              <p className="text-xs text-gray-600 mt-1">Members: {comparisonPrimaryScope.scopeDetails.memberCount}</p>
+                            )}
+                            {comparisonPrimaryScope?.scopeDetails?.userEmail && (
+                              <p className="text-xs text-gray-600 mt-1">{comparisonPrimaryScope.scopeDetails.userEmail}</p>
+                            )}
+                          </div>
+                          <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Secondary</p>
+                            <p className="text-sm font-semibold text-gray-900 mt-1">{comparisonSecondaryScope?.scopeLabel}</p>
+                            {comparisonSecondaryScope?.scopeDetails?.teamName && (
+                              <p className="text-xs text-gray-600 mt-1">Members: {comparisonSecondaryScope.scopeDetails.memberCount}</p>
+                            )}
+                            {comparisonSecondaryScope?.scopeDetails?.userEmail && (
+                              <p className="text-xs text-gray-600 mt-1">{comparisonSecondaryScope.scopeDetails.userEmail}</p>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="mt-6 rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-600">
-                      Comparison filters and request state are now wired up. The merged comparison visualisation will be added in the next implementation step.
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+                      {comparisonSummaryCards.map(([label, primaryValue, secondaryValue]) => (
+                        <div key={label} className="bg-white rounded-xl shadow-sm p-4">
+                          <p className="text-sm text-gray-500">{label}</p>
+                          <div className="mt-4 space-y-3">
+                            <div className="flex items-center justify-between rounded-lg bg-indigo-50 px-3 py-2">
+                              <span className="text-sm font-medium text-indigo-700 truncate mr-3">{comparisonPrimaryScope?.scopeLabel}</span>
+                              <span className="text-lg font-bold text-indigo-700">{primaryValue}</span>
+                            </div>
+                            <div className="flex items-center justify-between rounded-lg bg-green-50 px-3 py-2">
+                              <span className="text-sm font-medium text-green-700 truncate mr-3">{comparisonSecondaryScope?.scopeLabel}</span>
+                              <span className="text-lg font-bold text-green-700">{secondaryValue}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                      <div className="bg-white rounded-xl shadow-sm p-6">
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Reports Over Time</h4>
+                        {comparisonReportsChartData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={comparisonReportsChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                              <XAxis
+                                type="number"
+                                dataKey="pointIndex"
+                                domain={['dataMin', 'dataMax']}
+                                allowDecimals={false}
+                                tick={{ fontSize: 10 }}
+                                minTickGap={12}
+                                tickFormatter={(value) => comparisonReportsChartData[value]?.periodLabel || ''}
+                              />
+                              <YAxis tick={{ fontSize: 12 }} />
+                              <Tooltip labelFormatter={(label, payload) => payload?.[0]?.payload?.periodLabel || label} />
+                              <Legend />
+                              <Line type="linear" dataKey="primaryValue" name={comparisonPrimaryScope?.scopeLabel || 'Primary'} stroke={comparisonColours.primary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                              <Line type="linear" dataKey="secondaryValue" name={comparisonSecondaryScope?.scopeLabel || 'Secondary'} stroke={comparisonColours.secondary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[240px] flex items-center justify-center text-sm text-gray-400">No report trend data available yet.</div>
+                        )}
+                      </div>
+
+                      <div className="bg-white rounded-xl shadow-sm p-6">
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Pass Rate Over Time</h4>
+                        {comparisonPassRateChartData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={comparisonPassRateChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                              <XAxis
+                                type="number"
+                                dataKey="pointIndex"
+                                domain={['dataMin', 'dataMax']}
+                                allowDecimals={false}
+                                tick={{ fontSize: 10 }}
+                                minTickGap={12}
+                                tickFormatter={(value) => comparisonPassRateChartData[value]?.periodLabel || ''}
+                              />
+                              <YAxis domain={[0, 105]} tick={{ fontSize: 12 }} />
+                              <Tooltip formatter={(value) => [`${value}%`, 'Pass Rate']} labelFormatter={(label, payload) => payload?.[0]?.payload?.periodLabel || label} />
+                              <Legend />
+                              <Line type="linear" dataKey="primaryValue" name={comparisonPrimaryScope?.scopeLabel || 'Primary'} stroke={comparisonColours.primary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                              <Line type="linear" dataKey="secondaryValue" name={comparisonSecondaryScope?.scopeLabel || 'Secondary'} stroke={comparisonColours.secondary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[240px] flex items-center justify-center text-sm text-gray-400">No pass rate trend available yet.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                      <div className="bg-white rounded-xl shadow-sm p-6">
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Quality Score Trend</h4>
+                        {comparisonQualityScoreChartData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={comparisonQualityScoreChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                              <XAxis
+                                type="number"
+                                dataKey="pointIndex"
+                                domain={['dataMin', 'dataMax']}
+                                allowDecimals={false}
+                                tick={{ fontSize: 10 }}
+                                minTickGap={12}
+                                tickFormatter={(value) => comparisonQualityScoreChartData[value]?.pointLabel || ''}
+                              />
+                              <YAxis domain={[0, Math.max(comparisonQualityScoreMaxValue, 105)]} tick={{ fontSize: 12 }} />
+                              <Tooltip
+                                formatter={(value, name, entry) => {
+                                  const point = entry?.payload;
+                                  const seriesLabel = name === (comparisonPrimaryScope?.scopeLabel || 'Primary')
+                                    ? `${name}${point?.primaryDate ? ` (${point.primaryDate})` : ''}`
+                                    : `${name}${point?.secondaryDate ? ` (${point.secondaryDate})` : ''}`;
+                                  return [`${value}`, seriesLabel];
+                                }}
+                                labelFormatter={(label, payload) => payload?.[0]?.payload?.pointLabel || label}
+                              />
+                              <Legend />
+                              <Line type="linear" dataKey="primaryValue" name={comparisonPrimaryScope?.scopeLabel || 'Primary'} stroke={comparisonColours.primary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                              <Line type="linear" dataKey="secondaryValue" name={comparisonSecondaryScope?.scopeLabel || 'Secondary'} stroke={comparisonColours.secondary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[240px] flex items-center justify-center text-sm text-gray-400">No quality score trend available yet.</div>
+                        )}
+                      </div>
+
+                      <div className="bg-white rounded-xl shadow-sm p-6">
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Most Common Error Types</h4>
+                        {comparisonErrorTypeChartData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <BarChart data={comparisonErrorTypeChartData}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis />
+                              <Tooltip />
+                              <Legend />
+                              <Bar dataKey="primaryValue" name={comparisonPrimaryScope?.scopeLabel || 'Primary'} fill={comparisonColours.primary} />
+                              <Bar dataKey="secondaryValue" name={comparisonSecondaryScope?.scopeLabel || 'Secondary'} fill={comparisonColours.secondary} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[240px] flex items-center justify-center text-sm text-gray-400">No error type comparison data available yet.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mb-6">
+                      <div className="bg-white rounded-xl shadow-sm p-6">
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Top Common Errors</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-indigo-700 mb-3">{comparisonPrimaryScope?.scopeLabel}</p>
+                            {comparisonPrimaryScope?.topErrors?.length > 0 ? (
+                              <div className="space-y-2">
+                                {comparisonPrimaryScope.topErrors.slice(0, 5).map((error, idx) => (
+                                  <div key={`primary-${idx}`} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                                    <span className="text-sm text-gray-700 truncate max-w-[80%]">{error.message}</span>
+                                    <span className="text-sm font-semibold text-indigo-600">{error.count}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : <p className="text-sm text-gray-400">No errors found</p>}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-green-700 mb-3">{comparisonSecondaryScope?.scopeLabel}</p>
+                            {comparisonSecondaryScope?.topErrors?.length > 0 ? (
+                              <div className="space-y-2">
+                                {comparisonSecondaryScope.topErrors.slice(0, 5).map((error, idx) => (
+                                  <div key={`secondary-${idx}`} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                                    <span className="text-sm text-gray-700 truncate max-w-[80%]">{error.message}</span>
+                                    <span className="text-sm font-semibold text-green-600">{error.count}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : <p className="text-sm text-gray-400">No errors found</p>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 ) : (
                   <>
                 {/* Scope Label */}
