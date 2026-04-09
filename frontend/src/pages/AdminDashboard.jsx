@@ -719,6 +719,14 @@ const AdminDashboard = () => {
         ['Time Saved', `${comparisonPrimaryScope?.summary?.totalTimeSaved ?? 0}h`, `${comparisonSecondaryScope?.summary?.totalTimeSaved ?? 0}h`],
       ]
     : [];
+  const comparisonSelectionIncomplete = analyticsComparisonEnabled && (
+    (analyticsLevel === 'team' && analyticsTeamId && !analyticsCompareTeamId) ||
+    (analyticsLevel === 'user' && analyticsUserId && !analyticsCompareUserId)
+  );
+  const comparisonPrimaryHasNoReports = analyticsComparisonActive && (comparisonPrimaryScope?.summary?.totalReports ?? 0) === 0;
+  const comparisonSecondaryHasNoReports = analyticsComparisonActive && (comparisonSecondaryScope?.summary?.totalReports ?? 0) === 0;
+  const comparisonPrimaryHasNoAnalysed = analyticsComparisonActive && (comparisonPrimaryScope?.summary?.analyzedReports ?? 0) === 0;
+  const comparisonSecondaryHasNoAnalysed = analyticsComparisonActive && (comparisonSecondaryScope?.summary?.analyzedReports ?? 0) === 0;
 
   const renderUserProfileStats = (analytics, loading) => {
     if (loading) {
@@ -1575,6 +1583,12 @@ const AdminDashboard = () => {
               </div>
             )}
 
+            {comparisonSelectionIncomplete && (
+              <div className="mb-4 px-4 py-3 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-sm">
+                Select a second {analyticsLevel === 'team' ? 'team' : 'user'} to load comparison analytics.
+              </div>
+            )}
+
             {loadingAnalytics && !analyticsData ? (
               <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-500">
                 Loading analytics...
@@ -1615,6 +1629,33 @@ const AdminDashboard = () => {
                         </div>
                       </div>
                     </div>
+
+                    {(comparisonPrimaryHasNoReports || comparisonSecondaryHasNoReports || comparisonPrimaryHasNoAnalysed || comparisonSecondaryHasNoAnalysed) && (
+                      <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+                        <div className="space-y-2 text-sm">
+                          {comparisonPrimaryHasNoReports && (
+                            <p className="text-indigo-700">
+                              {comparisonPrimaryScope?.scopeLabel} has no reports in this range.
+                            </p>
+                          )}
+                          {comparisonSecondaryHasNoReports && (
+                            <p className="text-green-700">
+                              {comparisonSecondaryScope?.scopeLabel} has no reports in this range.
+                            </p>
+                          )}
+                          {!comparisonPrimaryHasNoReports && comparisonPrimaryHasNoAnalysed && (
+                            <p className="text-indigo-700">
+                              {comparisonPrimaryScope?.scopeLabel} has reports in this range, but none have been analysed yet.
+                            </p>
+                          )}
+                          {!comparisonSecondaryHasNoReports && comparisonSecondaryHasNoAnalysed && (
+                            <p className="text-green-700">
+                              {comparisonSecondaryScope?.scopeLabel} has reports in this range, but none have been analysed yet.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
                       {comparisonSummaryCards.map(([label, primaryValue, secondaryValue]) => (
@@ -1748,7 +1789,7 @@ const AdminDashboard = () => {
                     </div>
 
                     <div className="mb-6">
-                      <div className="bg-white rounded-xl shadow-sm p-6">
+                      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
                         <h4 className="text-lg font-semibold text-gray-900 mb-4">Top Common Errors</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
@@ -1776,6 +1817,42 @@ const AdminDashboard = () => {
                                 ))}
                               </div>
                             ) : <p className="text-sm text-gray-400">No errors found</p>}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-xl shadow-sm p-6">
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Recent Reports</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-indigo-700 mb-3">{comparisonPrimaryScope?.scopeLabel}</p>
+                            {comparisonPrimaryScope?.recentReports?.length > 0 ? (
+                              <div className="space-y-2">
+                                {comparisonPrimaryScope.recentReports.slice(0, 5).map((report) => (
+                                  <div key={`primary-report-${report._id}`} className="rounded-lg bg-gray-50 px-3 py-2">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{report.filename}</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {report.errorCount} errors · {formatDate(report.createdAt)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : <p className="text-sm text-gray-400">No recent reports</p>}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-green-700 mb-3">{comparisonSecondaryScope?.scopeLabel}</p>
+                            {comparisonSecondaryScope?.recentReports?.length > 0 ? (
+                              <div className="space-y-2">
+                                {comparisonSecondaryScope.recentReports.slice(0, 5).map((report) => (
+                                  <div key={`secondary-report-${report._id}`} className="rounded-lg bg-gray-50 px-3 py-2">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{report.filename}</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {report.errorCount} errors · {formatDate(report.createdAt)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : <p className="text-sm text-gray-400">No recent reports</p>}
                           </div>
                         </div>
                       </div>
