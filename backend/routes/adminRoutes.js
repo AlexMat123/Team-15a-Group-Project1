@@ -491,6 +491,30 @@ router.delete('/training/examples/:id', protect, authorize('admin'), async (req,
   }
 });
 
+// PATCH /api/admin/training/examples/:id/activate — set a template as the active one
+router.patch('/training/examples/:id/activate', protect, authorize('admin'), async (req, res) => {
+  try {
+    const example = await TrainingExample.findById(req.params.id);
+    if (!example) return res.status(404).json({ message: 'Training example not found' });
+    if (example.type !== 'template') {
+      return res.status(400).json({ message: 'Only template examples can be activated' });
+    }
+    if (example.status !== 'trained') {
+      return res.status(400).json({ message: 'Template must be trained before activating' });
+    }
+
+    // Deactivate any currently active template
+    await TrainingExample.updateMany({ type: 'template', isActive: true }, { isActive: false });
+
+    example.isActive = true;
+    await example.save();
+
+    res.json({ message: 'Template activated', example });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PATCH /api/admin/users/:id/status
 router.patch('/users/:id/status', protect, authorize('admin'), async (req, res) => {
   try {
