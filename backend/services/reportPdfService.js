@@ -29,11 +29,6 @@ const ERROR_TYPE_LABELS = {
   missing_data: 'Missing Data',
 };
 
-const SEVERITY_LABELS = {
-  high: 'High',
-  medium: 'Medium',
-  low: 'Low',
-};
 
 const generateReportPdf = (report, user, team) => {
   const doc = new PDFDocument({
@@ -225,18 +220,12 @@ const generateReportPdf = (report, user, team) => {
         checkPageBreak(doc, 80);
 
         const errY = doc.y;
-        const severity = SEVERITY_LABELS[err.severity] || 'Medium';
-
-        // Error number and severity
+        // Error number
         doc
           .font('Helvetica-Bold')
           .fontSize(10)
           .fillColor(COLORS.text)
-          .text(`Error ${idx + 1}`, 58, errY, { continued: true })
-          .font('Helvetica')
-          .fontSize(9)
-          .fillColor(COLORS.textLight)
-          .text(`  •  Severity: ${severity}`);
+          .text(`Error ${idx + 1}`, 58, errY);
 
         doc.moveDown(0.3);
 

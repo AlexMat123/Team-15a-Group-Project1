@@ -1,9 +1,20 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
+  AlertCircle,
   AlertTriangle,
+  ArrowDown,
+  BarChart3,
+  CheckCircle,
+  ChevronDown,
+  ChevronRight,
   Clock,
+  Download,
+  Eye,
   FileText,
+  Filter,
   KeyRound,
+  Loader2,
   Search,
   Trash2,
   Users,
@@ -12,7 +23,11 @@ import {
 import {
   Bar,
   BarChart,
+  CartesianGrid,
   Cell,
+  Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -27,6 +42,7 @@ import api from '../services/api';
 
 const tabs = [
   { id: 'overview', label: 'Overview' },
+  { id: 'analytics', label: 'Analytics' },
   { id: 'users', label: 'Users' },
   { id: 'manage', label: 'Manage' },
   { id: 'reports', label: 'Reports' },
@@ -77,6 +93,7 @@ const AdminDashboard = () => {
   const [role, setRole] = useState('user');
   const [searchTerm, setSearchTerm] = useState('');
   const [reportSearch, setReportSearch] = useState('');
+  const [expandedReports, setExpandedReports] = useState({});
   const [openTrainingMenu, setOpenTrainingMenu] = useState(null);
   const [users, setUsers] = useState([]);
   const [reports, setReports] = useState([]);
@@ -93,6 +110,12 @@ const AdminDashboard = () => {
   const [passwordResetRequests, setPasswordResetRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [reportsError, setReportsError] = useState('');
+  // Overview filters
+  const [filterRange, setFilterRange] = useState('all');
+  const [filterTeam, setFilterTeam] = useState('');
+  const [filterUser, setFilterUser] = useState('');
+  const [filterResult, setFilterResult] = useState('');
+
   const [dashboardStats, setDashboardStats] = useState({
     totalReports: 0,
     totalErrors: 0,
@@ -129,6 +152,15 @@ const AdminDashboard = () => {
   const [showTeamAnalytics, setShowTeamAnalytics] = useState(false);
   const [teamStats, setTeamStats] = useState(null);
   const [teamStatsLoading, setTeamStatsLoading] = useState(false);
+  const [teamFilterRange, setTeamFilterRange] = useState('all');
+  const [teamFilterUser, setTeamFilterUser] = useState('');
+  const [teamFilterResult, setTeamFilterResult] = useState('');
+
+  // User profile analytics (shown when filtering by a specific user)
+  const [userProfileAnalytics, setUserProfileAnalytics] = useState(null);
+  const [userProfileLoading, setUserProfileLoading] = useState(false);
+  const [teamUserProfileAnalytics, setTeamUserProfileAnalytics] = useState(null);
+  const [teamUserProfileLoading, setTeamUserProfileLoading] = useState(false);
 
   // --- Training state ---
   const [trainingExamples, setTrainingExamples] = useState([]);
@@ -149,6 +181,15 @@ const AdminDashboard = () => {
   const [syncingTraining, setSyncingTraining] = useState(false);
   const [deletingExampleId, setDeletingExampleId] = useState('');
   const [dragActive, setDragActive] = useState(false);
+
+  // --- Analytics state ---
+  const [analyticsLevel, setAnalyticsLevel] = useState('company');
+  const [analyticsTeamId, setAnalyticsTeamId] = useState('');
+  const [analyticsUserId, setAnalyticsUserId] = useState('');
+  const [analyticsRange, setAnalyticsRange] = useState('30');
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState('');
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -220,12 +261,20 @@ const AdminDashboard = () => {
     };
   };
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (range = filterRange, team = filterTeam, userId = filterUser, result = filterResult) => {
     setLoadingReports(true);
+
+    // Build query string from active filters
+    const params = new URLSearchParams();
+    if (range && range !== 'all') params.append('range', range);
+    if (team) params.append('team', team);
+    if (userId) params.append('user', userId);
+    if (result) params.append('result', result);
+    const qs = params.toString() ? `?${params.toString()}` : '';
 
     try {
       const [statsResponse, reportsResponse] = await Promise.all([
-        api.get('/admin/stats'),
+        api.get(`/admin/stats${qs}`),
         api.get('/admin/reports'),
       ]);
 
@@ -245,6 +294,7 @@ const AdminDashboard = () => {
         aiTime: statsResponse.data?.aiTime || 0,
         timeSavedPercent: statsResponse.data?.timeSavedPercent || 0,
         errorBreakdown: statsResponse.data?.errorBreakdown || [],
+        qualityBreakdown: statsResponse.data?.qualityBreakdown || null,
       });
       setReports(reportsResponse.data || []);
       setReportsError('');
@@ -267,6 +317,51 @@ const AdminDashboard = () => {
       setLoadingReports(false);
     }
   };
+
+  // Re-fetch stats when any filter changes
+  useEffect(() => {
+    fetchDashboardData(filterRange, filterTeam, filterUser, filterResult);
+  }, [filterRange, filterTeam, filterUser, filterResult]);
+
+  // Fetch user profile analytics when a specific user is selected in the overview filter
+  useEffect(() => {
+    if (!filterUser) {
+      setUserProfileAnalytics(null);
+      return;
+    }
+    const fetchUserProfile = async () => {
+      setUserProfileLoading(true);
+      try {
+        const res = await api.get(`/admin/users/${filterUser}/profile-analytics`);
+        setUserProfileAnalytics(res.data);
+      } catch {
+        setUserProfileAnalytics(null);
+      } finally {
+        setUserProfileLoading(false);
+      }
+    };
+    fetchUserProfile();
+  }, [filterUser]);
+
+  // Fetch user profile analytics when a specific member is selected in the team analytics filter
+  useEffect(() => {
+    if (!teamFilterUser) {
+      setTeamUserProfileAnalytics(null);
+      return;
+    }
+    const fetchTeamUserProfile = async () => {
+      setTeamUserProfileLoading(true);
+      try {
+        const res = await api.get(`/admin/users/${teamFilterUser}/profile-analytics`);
+        setTeamUserProfileAnalytics(res.data);
+      } catch {
+        setTeamUserProfileAnalytics(null);
+      } finally {
+        setTeamUserProfileLoading(false);
+      }
+    };
+    fetchTeamUserProfile();
+  }, [teamFilterUser]);
 
   const fetchTrainingData = async () => {
     setLoadingTraining(true);
@@ -381,13 +476,38 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchAnalytics = async () => {
+    setLoadingAnalytics(true);
+    setAnalyticsError('');
+    try {
+      const params = new URLSearchParams({ level: analyticsLevel, range: analyticsRange });
+      if (analyticsLevel === 'team' && analyticsTeamId) {
+        params.append('teamId', analyticsTeamId);
+      }
+      if (analyticsLevel === 'user' && analyticsUserId) {
+        params.append('userId', analyticsUserId);
+      }
+      const response = await api.get(`/admin/analytics?${params.toString()}`);
+      setAnalyticsData(response.data);
+    } catch (error) {
+      setAnalyticsError(error.response?.data?.message || 'Failed to load analytics');
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchPasswordResetRequest();
-    fetchDashboardData();
     fetchTeams();
     fetchTrainingData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'analytics') {
+      fetchAnalytics();
+    }
+  }, [activeTab, analyticsLevel, analyticsTeamId, analyticsUserId, analyticsRange]);
 
   const stats = [
     { label: 'Total Users', value: users.length, icon: Users, color: 'bg-blue-500' },
@@ -406,6 +526,288 @@ const AdminDashboard = () => {
     { label: 'AI Review Time', value: `${dashboardStats.aiTime}h`, bg: 'bg-green-100', text: 'text-green-600' },
     { label: 'Time Saved', value: `${dashboardStats.timeSavedPercent}%`, bg: 'bg-purple-100', text: 'text-purple-600' },
   ];
+
+  const errorSummaryCards = [
+    { key: 'placeholder', label: 'Placeholder', valueClass: 'text-orange-600', cardClass: 'bg-orange-50' },
+    { key: 'consistency', label: 'Consistency', valueClass: 'text-blue-600', cardClass: 'bg-blue-50' },
+    { key: 'compliance', label: 'Compliance', valueClass: 'text-red-600', cardClass: 'bg-red-50' },
+    { key: 'formatting', label: 'Formatting', valueClass: 'text-purple-600', cardClass: 'bg-purple-50' },
+    { key: 'missing_data', label: 'Missing Data', valueClass: 'text-green-600', cardClass: 'bg-green-50' },
+  ];
+
+  const errorTypeLabelMap = {
+    placeholder: 'Placeholder', consistency: 'Consistency', compliance: 'Compliance',
+    formatting: 'Formatting', missing_data: 'Missing Data',
+  };
+  const errorTypeColors = ['#F97316', '#2563EB', '#DC2626', '#9333EA', '#16A34A'];
+
+  const renderUserProfileStats = (analytics, loading) => {
+    if (loading) {
+      return (
+        <div className="py-8 flex items-center justify-center text-gray-500">
+          <Loader2 className="w-5 h-5 animate-spin mr-2 text-indigo-600" />
+          Loading user analytics...
+        </div>
+      );
+    }
+    if (!analytics) return null;
+
+    const { summary, errorBreakdown, qualityBreakdown, mostCommonErrorTypes, checklistFailureBreakdown, qualityScoreTrend } = analytics;
+
+    const averageErrorTypeBreakdown = errorSummaryCards.map((card) => {
+      const totalForType = errorBreakdown?.[card.key] ?? 0;
+      const analyzed = summary?.analyzedReports ?? 0;
+      return { ...card, average: analyzed > 0 ? Number((totalForType / analyzed).toFixed(2)) : 0 };
+    });
+
+    const commonErrorTypeChartData = (mostCommonErrorTypes || []).map((item, index) => ({
+      name: errorTypeLabelMap[item.type] || item.type,
+      errors: item.count,
+      fill: errorTypeColors[index % errorTypeColors.length],
+    }));
+
+    const checklistChartData = (checklistFailureBreakdown || []).map((item) => ({
+      shortLabel: item.message.length > 28 ? `${item.message.slice(0, 28)}...` : item.message,
+      fullLabel: item.message,
+      count: item.count,
+    }));
+
+    const qualityScoreMaxValue = (qualityScoreTrend || []).reduce((max, r) => Math.max(max, r.qualityScore || 0), 0);
+    const qualityScoreChartData = (qualityScoreTrend || []).map((r) => ({
+      label: r.filename.length > 18 ? `${r.filename.slice(0, 18)}...` : r.filename,
+      fullLabel: r.filename,
+      score: r.qualityScore,
+      date: formatDate(r.createdAt),
+    }));
+
+    const summaryCards = [
+      { label: 'Total Reports', value: summary?.totalReports ?? 0, icon: FileText },
+      { label: 'Analyzed Reports', value: summary?.analyzedReports ?? 0, icon: CheckCircle },
+      { label: 'Total Errors', value: summary?.totalErrors ?? 0, icon: AlertCircle },
+      { label: 'Average Errors', value: summary?.averageErrorsPerReport ?? 0, icon: BarChart3 },
+      { label: 'Time Saved', value: `${summary?.totalTimeSaved ?? 0} min`, icon: Clock },
+    ];
+
+    return (
+      <div className="mt-4 space-y-6">
+        {/* User info header */}
+        {analytics.user && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+            <p className="text-sm font-semibold text-indigo-800">
+              Individual Statistics for {analytics.user.name}
+            </p>
+            <p className="text-xs text-indigo-600">{analytics.user.email}</p>
+          </div>
+        )}
+
+        {/* Summary cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+          {summaryCards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <div key={card.label} className="rounded-xl bg-gray-50 p-4 border border-gray-100">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-500">{card.label}</p>
+                  <Icon className="w-5 h-5 text-indigo-600" />
+                </div>
+                <p className="text-2xl font-bold text-gray-900 mt-3">{card.value}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Passed / Failed */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-xl border border-gray-200 p-4">
+            <p className="text-sm text-gray-500">Failed Reports</p>
+            <p className="text-2xl font-semibold text-gray-900 mt-2">{summary?.failedReports ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 p-4">
+            <p className="text-sm text-gray-500">Passed Reviews</p>
+            <p className="text-2xl font-semibold text-gray-900 mt-2">{qualityBreakdown?.good ?? 0}</p>
+          </div>
+        </div>
+
+        {/* Average Errors Per Report */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Average Errors Per Report</h3>
+          <p className="text-sm text-gray-500 mt-1">The average number of each error type found per analyzed report.</p>
+          <div className="rounded-xl border border-gray-200 p-5 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+              {averageErrorTypeBreakdown.map((item) => (
+                <div key={item.key} className={`rounded-xl px-4 py-4 text-center border border-transparent ${item.cardClass}`}>
+                  <p className={`text-2xl font-bold ${item.valueClass}`}>{item.average}</p>
+                  <p className="text-sm text-gray-700 mt-1">{item.label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div className="rounded-xl bg-white border border-gray-200 p-4">
+                <p className="text-sm text-gray-500">Analyzed Reports</p>
+                <p className="text-2xl font-semibold text-gray-900 mt-2">{summary?.analyzedReports ?? 0}</p>
+              </div>
+              <div className="rounded-xl bg-white border border-gray-200 p-4">
+                <p className="text-sm text-gray-500">Overall Average Errors</p>
+                <p className="text-2xl font-semibold text-gray-900 mt-2">{summary?.averageErrorsPerReport ?? 0}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quality Score Trend */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Quality Score Trend</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Per-report quality score over time.</p>
+          <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
+            {qualityScoreTrend?.length ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={qualityScoreChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis domain={[0, Math.max(qualityScoreMaxValue, 100)]} tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(value) => [`${value}`, 'Quality Score']}
+                    labelFormatter={(label, payload) => {
+                      const point = payload?.[0]?.payload;
+                      return point ? `${point.fullLabel} - ${point.date}` : label;
+                    }}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="score" name="Quality Score" stroke="#10B981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-gray-500">No analyzed reports with quality scores yet.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Most Common Error Types */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Most Common Error Types</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Ranked by frequency.</p>
+          <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={commonErrorTypeChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value) => [`${value}`, 'Errors']} />
+                <Bar dataKey="errors" name="Errors" radius={[6, 6, 0, 0]}>
+                  {commonErrorTypeChartData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Checklist Failures */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Top Recurring Checklist Failures</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">The most frequently repeated issue messages.</p>
+          <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
+            {checklistFailureBreakdown?.length ? (
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={checklistChartData} layout="vertical" margin={{ top: 10, right: 30, left: 20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <XAxis type="number" tick={{ fontSize: 12 }} />
+                  <YAxis dataKey="shortLabel" type="category" tick={{ fontSize: 12 }} width={55} />
+                  <Tooltip
+                    formatter={(value) => [`${value}`, 'Occurrences']}
+                    labelFormatter={(label, payload) => payload?.[0]?.payload?.fullLabel || label}
+                  />
+                  <Bar dataKey="count" fill="#6366F1" radius={[0, 6, 6, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-gray-500">No recurring checklist failures found yet.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Recent Reports */}
+        {analytics.recentReports?.length > 0 && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Recent Reports</h3>
+            <div className="overflow-x-auto border border-gray-200 rounded-xl">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Report</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Errors</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Result</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {analytics.recentReports.map((report) => (
+                    <tr key={report._id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{report.filename}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          report.status === 'analyzed' ? 'bg-green-100 text-green-800' :
+                          report.status === 'failed' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {report.status ? report.status.charAt(0).toUpperCase() + report.status.slice(1) : 'Unknown'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm">
+                        {report.status === 'analyzed' ? (
+                          <span className={`font-medium ${report.errorCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {report.errorCount} {report.errorCount === 1 ? 'error' : 'errors'}
+                          </span>
+                        ) : <span className="text-gray-400">-</span>}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {report.status === 'analyzed' ? (
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            report.qualityLabel === 'good' ? 'bg-green-100 text-green-800' :
+                            report.qualityLabel === 'bad' ? 'bg-red-100 text-red-800' :
+                            'bg-amber-100 text-amber-800'
+                          }`}>
+                            {report.qualityLabel === 'good' ? 'Passed' : report.qualityLabel === 'bad' ? 'Failed' : 'Uncertain'}
+                          </span>
+                        ) : <span className="text-sm text-gray-400">Pending</span>}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{formatDate(report.createdAt)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                        <Link
+                          to={`/report/${report._id}`}
+                          className="text-indigo-600 hover:text-indigo-900 mr-3"
+                          title="View Report"
+                        >
+                          <Eye className="w-4 h-4 inline" />
+                        </Link>
+                        <button
+                          onClick={() => handleReportDownload(report._id, report.filename)}
+                          className="text-gray-600 hover:text-gray-900 mr-3"
+                          title="Download Summary"
+                        >
+                          <Download className="w-4 h-4 inline" />
+                        </button>
+                        <button
+                          onClick={() => handleReportDelete(report._id)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Delete Report"
+                        >
+                          <Trash2 className="w-4 h-4 inline" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const filteredUsers = users.filter((entry) => {
     const query = searchTerm.trim().toLowerCase();
@@ -632,11 +1034,15 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleOpenTeamAnalytics = async () => {
+  const fetchTeamStats = async (range = teamFilterRange, userId = teamFilterUser, result = teamFilterResult) => {
     setTeamStatsLoading(true);
-    setShowTeamAnalytics(true);
     try {
-      const res = await api.get(`/admin/teams/${manageTeamId}/stats`);
+      const params = new URLSearchParams();
+      if (range && range !== 'all') params.append('range', range);
+      if (userId) params.append('user', userId);
+      if (result) params.append('result', result);
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const res = await api.get(`/admin/teams/${manageTeamId}/stats${qs}`);
       setTeamStats(res.data);
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to load team analytics');
@@ -644,6 +1050,51 @@ const AdminDashboard = () => {
     } finally {
       setTeamStatsLoading(false);
     }
+  };
+
+  const handleReportDownload = async (reportId, filename) => {
+    try {
+      const response = await api.get(`/reports/${reportId}/download`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      const sanitised = filename.replace(/\.pdf$/i, '');
+      link.setAttribute('download', `QC_Report_${sanitised}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to download report');
+    }
+  };
+
+  const handleReportDelete = async (reportId) => {
+    if (!window.confirm('Are you sure you want to delete this report?')) return;
+    try {
+      await api.delete(`/reports/${reportId}`);
+      // Re-fetch team stats if viewing team analytics
+      if (showTeamAnalytics) fetchTeamStats();
+      // Re-fetch user profile analytics if viewing individual stats
+      if (filterUser) {
+        const res = await api.get(`/admin/users/${filterUser}/profile-analytics`);
+        setUserProfileAnalytics(res.data);
+      }
+      if (teamFilterUser) {
+        const res = await api.get(`/admin/users/${teamFilterUser}/profile-analytics`);
+        setTeamUserProfileAnalytics(res.data);
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete report');
+    }
+  };
+
+  const handleOpenTeamAnalytics = async () => {
+    setTeamFilterRange('all');
+    setTeamFilterUser('');
+    setTeamFilterResult('');
+    setShowTeamAnalytics(true);
+    fetchTeamStats('all', '', '');
   };
 
   const handleDeleteTeam = async () => {
@@ -784,6 +1235,347 @@ const AdminDashboard = () => {
               </div>
             )}
           </>
+        )}
+
+        {/* ── ANALYTICS TAB ── */}
+        {activeTab === 'analytics' && (
+          <section>
+            {/* Filters */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Analytics Filters</h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Level</label>
+                  <select
+                    value={analyticsLevel}
+                    onChange={(e) => {
+                      setAnalyticsLevel(e.target.value);
+                      setAnalyticsTeamId('');
+                      setAnalyticsUserId('');
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="company">Company-wide</option>
+                    <option value="team">By Team</option>
+                    <option value="user">By User</option>
+                  </select>
+                </div>
+
+                {analyticsLevel === 'team' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Select Team</label>
+                    <select
+                      value={analyticsTeamId}
+                      onChange={(e) => setAnalyticsTeamId(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    >
+                      <option value="">All Teams</option>
+                      {teams.map((team) => (
+                        <option key={team._id} value={team._id}>{team.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {analyticsLevel === 'user' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Select User</label>
+                    <select
+                      value={analyticsUserId}
+                      onChange={(e) => setAnalyticsUserId(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    >
+                      <option value="">Select a user...</option>
+                      {users.map((u) => (
+                        <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Time Range</label>
+                  <select
+                    value={analyticsRange}
+                    onChange={(e) => setAnalyticsRange(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="7">Last 7 days</option>
+                    <option value="30">Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="all">All time</option>
+                  </select>
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    onClick={fetchAnalytics}
+                    disabled={loadingAnalytics}
+                    className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {loadingAnalytics ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {analyticsError && (
+              <div className="mb-4 px-4 py-3 bg-red-100 text-red-800 rounded-lg text-sm">
+                {analyticsError}
+              </div>
+            )}
+
+            {loadingAnalytics && !analyticsData ? (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center text-gray-500 dark:text-gray-400">
+                Loading analytics...
+              </div>
+            ) : analyticsData ? (
+              <>
+                {/* Scope Label */}
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-gray-900">{analyticsData.scopeLabel}</h3>
+                  <p className="text-sm text-gray-500">
+                    {analyticsRange === 'all' ? 'All time' : `Last ${analyticsRange} days`}
+                  </p>
+                </div>
+
+                {/* Summary Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+                    <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{analyticsData.summary.totalReports}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Reports</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{analyticsData.summary.analyzedReports}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Analyzed</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+                    <p className="text-2xl font-bold text-red-500 dark:text-red-400">{analyticsData.summary.totalErrors}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Errors</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+                    <p className="text-2xl font-bold text-amber-500 dark:text-amber-400">{analyticsData.summary.averageErrorsPerReport}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Avg Errors/Report</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+                    <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{analyticsData.summary.passRate}%</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Pass Rate</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+                    <p className="text-2xl font-bold text-teal-600 dark:text-teal-400">{analyticsData.summary.totalTimeSaved}h</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Time Saved</p>
+                  </div>
+                </div>
+
+                {/* Charts Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  {/* Error Breakdown */}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Error Breakdown</h4>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={analyticsData.errorBreakdown}>
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#6366f1" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Quality Distribution */}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quality Distribution</h4>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Passed', value: analyticsData.qualityBreakdown.good },
+                            { name: 'Failed', value: analyticsData.qualityBreakdown.bad },
+                            { name: 'Uncertain', value: analyticsData.qualityBreakdown.uncertain },
+                          ]}
+                          dataKey="value"
+                          nameKey="name"
+                          outerRadius={80}
+                          label={({ name, value }) => value > 0 ? `${name}: ${value}` : ''}
+                        >
+                          <Cell fill="#10b981" />
+                          <Cell fill="#ef4444" />
+                          <Cell fill="#f59e0b" />
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Trend Chart */}
+                {analyticsData.trendData && analyticsData.trendData.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Reports Over Time</h4>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={analyticsData.trendData}>
+                        <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="reports" fill="#6366f1" name="Reports" />
+                        <Bar dataKey="passed" fill="#10b981" name="Passed" />
+                        <Bar dataKey="failed" fill="#ef4444" name="Failed" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* Time Savings */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Time Savings Analysis</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-purple-100 dark:bg-purple-900/30 rounded-lg p-4 text-center">
+                      <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{analyticsData.summary.manualTime}h</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manual Review Time</p>
+                    </div>
+                    <div className="bg-green-100 dark:bg-green-900/30 rounded-lg p-4 text-center">
+                      <p className="text-2xl font-bold text-green-600 dark:text-green-400">{analyticsData.summary.aiTime}h</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">AI Review Time</p>
+                    </div>
+                    <div className="bg-purple-100 dark:bg-purple-900/30 rounded-lg p-4 text-center">
+                      <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{analyticsData.summary.timeSavedPercent}%</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Time Saved</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Two Column: Top Errors & User Leaderboard */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  {/* Top Errors */}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Common Errors</h4>
+                    {analyticsData.topErrors && analyticsData.topErrors.length > 0 ? (
+                      <div className="space-y-2">
+                        {analyticsData.topErrors.slice(0, 5).map((error, idx) => (
+                          <div key={idx} className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                            <span className="text-sm text-gray-700 dark:text-gray-300 truncate max-w-[80%]">{error.message}</span>
+                            <span className="text-sm font-semibold text-red-600 dark:text-red-400">{error.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400">No errors found</p>
+                    )}
+                  </div>
+
+                  {/* User Leaderboard */}
+                  {analyticsLevel === 'company' && analyticsData.userLeaderboard && analyticsData.userLeaderboard.length > 0 && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                      <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Users by Reports</h4>
+                      <div className="space-y-2">
+                        {analyticsData.userLeaderboard.slice(0, 5).map((u, idx) => (
+                          <div key={idx} className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">{u.userName}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">{u.reportCount} reports · {u.passRate}% pass rate</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setAnalyticsLevel('user');
+                                setAnalyticsUserId(u.odId);
+                              }}
+                              className="text-xs text-indigo-600 hover:underline"
+                            >
+                              View
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Team Members (when viewing team) */}
+                  {analyticsLevel === 'team' && analyticsData.scopeDetails && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                      <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Team Info</h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        <span className="font-medium">Team:</span> {analyticsData.scopeDetails.teamName}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        <span className="font-medium">Members:</span> {analyticsData.scopeDetails.memberCount}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* User Info (when viewing user) */}
+                  {analyticsLevel === 'user' && analyticsData.scopeDetails && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                      <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">User Info</h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        <span className="font-medium">Name:</span> {analyticsData.scopeDetails.userName}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        <span className="font-medium">Email:</span> {analyticsData.scopeDetails.userEmail}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        <span className="font-medium">Role:</span> {analyticsData.scopeDetails.userRole?.replace('_', ' ')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Recent Reports */}
+                {analyticsData.recentReports && analyticsData.recentReports.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Reports</h4>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
+                            <th className="px-4 py-3 font-semibold">Filename</th>
+                            <th className="px-4 py-3 font-semibold">Status</th>
+                            <th className="px-4 py-3 font-semibold">Errors</th>
+                            <th className="px-4 py-3 font-semibold">Result</th>
+                            <th className="px-4 py-3 font-semibold">Analyzed By</th>
+                            <th className="px-4 py-3 font-semibold">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {analyticsData.recentReports.map((report) => (
+                            <tr key={report._id} className="border-b border-gray-100 dark:border-gray-700 last:border-0">
+                              <td className="px-4 py-3 text-gray-900 dark:text-white truncate max-w-[200px]">{report.filename}</td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                  report.status === 'analyzed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                  report.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                  'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                }`}>
+                                  {report.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{report.errorCount}</td>
+                              <td className="px-4 py-3">
+                                {report.qualityLabel ? (
+                                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                    report.qualityLabel === 'good' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                    report.qualityLabel === 'bad' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                    'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                  }`}>
+                                    {report.qualityLabel}
+                                  </span>
+                                ) : '-'}
+                              </td>
+                              <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{report.analyzedBy}</td>
+                              <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{formatDate(report.createdAt)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center text-gray-500 dark:text-gray-400">
+                Select filters and click Refresh to load analytics
+              </div>
+            )}
+          </section>
         )}
 
         {activeTab === 'users' && (
@@ -1785,6 +2577,28 @@ const AdminDashboard = () => {
                         </div>
                       </div>
 
+                      {/* Quality Assessment Breakdown */}
+                      {teamStats.qualityBreakdown && (
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-green-600">{teamStats.qualityBreakdown.passed}</p>
+                            <p className="text-xs text-gray-500 mt-1">Passed</p>
+                          </div>
+                          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-red-600">{teamStats.qualityBreakdown.failed}</p>
+                            <p className="text-xs text-gray-500 mt-1">Failed</p>
+                          </div>
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-amber-600">{teamStats.qualityBreakdown.uncertain}</p>
+                            <p className="text-xs text-gray-500 mt-1">Uncertain</p>
+                          </div>
+                          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                            <p className="text-2xl font-bold text-gray-600">{teamStats.qualityBreakdown.pending}</p>
+                            <p className="text-xs text-gray-500 mt-1">Pending</p>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Charts */}
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                         <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
@@ -1829,6 +2643,106 @@ const AdminDashboard = () => {
                           </div>
                         </div>
                       </div>
+
+                      {/* Member Breakdown */}
+                      {teamStats.memberBreakdown?.length > 0 && (
+                        <div className="border border-gray-200 rounded-xl p-4 mb-6">
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Member Breakdown</h4>
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-gray-500 bg-gray-50">
+                                <th className="pb-2 pt-2 px-3">Member</th>
+                                <th className="pb-2 pt-2 px-3 text-center">Reports</th>
+                                <th className="pb-2 pt-2 px-3 text-center">Errors</th>
+                                <th className="pb-2 pt-2 px-3 text-center">Passed</th>
+                                <th className="pb-2 pt-2 px-3 text-center">Failed</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {teamStats.memberBreakdown.map(m => (
+                                <tr key={m._id} className="border-t border-gray-100 hover:bg-gray-50">
+                                  <td className="py-2.5 px-3">
+                                    <p className="font-medium text-gray-900">{m.name}</p>
+                                    <p className="text-xs text-gray-400">{m.email}</p>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-center text-gray-700">{m.reportsCount}</td>
+                                  <td className="py-2.5 px-3 text-center text-red-600 font-medium">{m.errorsFound}</td>
+                                  <td className="py-2.5 px-3 text-center text-green-600 font-medium">{m.passed}</td>
+                                  <td className="py-2.5 px-3 text-center text-red-600 font-medium">{m.failed}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Recent Reports */}
+                      {teamStats.recentReports?.length > 0 && (
+                        <div className="border border-gray-200 rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-gray-900 mb-3">Recent Reports</h4>
+                          <div className="space-y-2">
+                            {teamStats.recentReports.map(r => (
+                              <div key={r._id} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2.5">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">{r.filename}</p>
+                                  <p className="text-xs text-gray-400">
+                                    by {r.analyzedBy} — {new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-3 ml-4">
+                                  <span className="text-xs text-red-500 font-medium">{r.errorCount} errors</span>
+                                  {r.result === 'good' && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-green-100 text-green-700">Passed</span>
+                                  )}
+                                  {r.result === 'bad' && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-700">Failed</span>
+                                  )}
+                                  {r.result === 'uncertain' && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-700">Uncertain</span>
+                                  )}
+                                  {!r.result && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-500">{r.status}</span>
+                                  )}
+                                  <Link
+                                    to={`/report/${r._id}`}
+                                    className="text-indigo-600 hover:text-indigo-900"
+                                    title="View Report"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </Link>
+                                  <button
+                                    onClick={() => handleReportDownload(r._id, r.filename)}
+                                    className="text-gray-600 hover:text-gray-900"
+                                    title="Download Summary"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleReportDelete(r._id)}
+                                    className="text-red-600 hover:text-red-900"
+                                    title="Delete Report"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Individual Member Profile Stats (shown when filtering by a specific member) */}
+                      {teamFilterUser && (
+                        <div id="team-user-profile-stats" className="border border-gray-200 rounded-xl p-4 mt-4">
+                          {renderUserProfileStats(teamUserProfileAnalytics, teamUserProfileLoading)}
+                        </div>
+                      )}
+
+                      {teamStats.totalReports === 0 && !teamFilterUser && (
+                        <div className="bg-gray-50 rounded-xl p-8 text-center">
+                          <p className="text-gray-400 text-sm">No reports have been submitted by members of this team yet.</p>
+                        </div>
+                      )}
                     </>
                   ) : null}
 

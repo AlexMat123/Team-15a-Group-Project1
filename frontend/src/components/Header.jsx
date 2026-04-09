@@ -28,7 +28,7 @@ const Header = () => {
                     My Team
                   </Link>
                 )}
-                {(user?.role === 'admin' || user?.role === 'team_leader') && (
+                {user?.role === 'admin' && (
                   <Link
                     to="/admin"
                     className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
