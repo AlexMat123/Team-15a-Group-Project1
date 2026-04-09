@@ -185,11 +185,14 @@ const AdminDashboard = () => {
   // --- Analytics state ---
   const [analyticsLevel, setAnalyticsLevel] = useState('company');
   const [analyticsTeamId, setAnalyticsTeamId] = useState('');
+  const [analyticsCompareTeamId, setAnalyticsCompareTeamId] = useState('');
   const [analyticsUserId, setAnalyticsUserId] = useState('');
+  const [analyticsCompareUserId, setAnalyticsCompareUserId] = useState('');
   const [analyticsRange, setAnalyticsRange] = useState('30');
   const [analyticsData, setAnalyticsData] = useState(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [analyticsError, setAnalyticsError] = useState('');
+  const [analyticsComparisonEnabled, setAnalyticsComparisonEnabled] = useState(false);
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -483,9 +486,15 @@ const AdminDashboard = () => {
       const params = new URLSearchParams({ level: analyticsLevel, range: analyticsRange });
       if (analyticsLevel === 'team' && analyticsTeamId) {
         params.append('teamId', analyticsTeamId);
+        if (analyticsComparisonEnabled && analyticsCompareTeamId) {
+          params.append('compareTeamId', analyticsCompareTeamId);
+        }
       }
       if (analyticsLevel === 'user' && analyticsUserId) {
         params.append('userId', analyticsUserId);
+        if (analyticsComparisonEnabled && analyticsCompareUserId) {
+          params.append('compareUserId', analyticsCompareUserId);
+        }
       }
       const response = await api.get(`/admin/analytics?${params.toString()}`);
       setAnalyticsData(response.data);
@@ -511,8 +520,11 @@ const AdminDashboard = () => {
     activeTab,
     analyticsLevel,
     analyticsTeamId,
+    analyticsCompareTeamId,
     analyticsUserId,
+    analyticsCompareUserId,
     analyticsRange,
+    analyticsComparisonEnabled,
   ]);
 
   const stats = [
@@ -1287,7 +1299,7 @@ const AdminDashboard = () => {
             {/* Filters */}
             <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Analytics Filters</h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 lg:grid-cols-6 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Level</label>
                   <select
@@ -1295,7 +1307,10 @@ const AdminDashboard = () => {
                     onChange={(e) => {
                       setAnalyticsLevel(e.target.value);
                       setAnalyticsTeamId('');
+                      setAnalyticsCompareTeamId('');
                       setAnalyticsUserId('');
+                      setAnalyticsCompareUserId('');
+                      setAnalyticsComparisonEnabled(false);
                     }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                   >
@@ -1310,7 +1325,13 @@ const AdminDashboard = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Select Team</label>
                     <select
                       value={analyticsTeamId}
-                      onChange={(e) => setAnalyticsTeamId(e.target.value)}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        setAnalyticsTeamId(nextValue);
+                        if (nextValue && nextValue === analyticsCompareTeamId) {
+                          setAnalyticsCompareTeamId('');
+                        }
+                      }}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     >
                       <option value="">All Teams</option>
@@ -1326,13 +1347,55 @@ const AdminDashboard = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Select User</label>
                     <select
                       value={analyticsUserId}
-                      onChange={(e) => setAnalyticsUserId(e.target.value)}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        setAnalyticsUserId(nextValue);
+                        if (nextValue && nextValue === analyticsCompareUserId) {
+                          setAnalyticsCompareUserId('');
+                        }
+                      }}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     >
                       <option value="">Select a user...</option>
                       {users.map((u) => (
                         <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
                       ))}
+                    </select>
+                  </div>
+                )}
+
+                {analyticsLevel === 'team' && analyticsComparisonEnabled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Compare With Team</label>
+                    <select
+                      value={analyticsCompareTeamId}
+                      onChange={(e) => setAnalyticsCompareTeamId(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    >
+                      <option value="">Select a team...</option>
+                      {teams
+                        .filter((team) => team._id !== analyticsTeamId)
+                        .map((team) => (
+                          <option key={team._id} value={team._id}>{team.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+
+                {analyticsLevel === 'user' && analyticsComparisonEnabled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Compare With User</label>
+                    <select
+                      value={analyticsCompareUserId}
+                      onChange={(e) => setAnalyticsCompareUserId(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    >
+                      <option value="">Select a user...</option>
+                      {users
+                        .filter((u) => u._id !== analyticsUserId)
+                        .map((u) => (
+                          <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
+                        ))}
                     </select>
                   </div>
                 )}
@@ -1351,11 +1414,31 @@ const AdminDashboard = () => {
                   </select>
                 </div>
 
-                <div className="flex items-end">
+                <div className="flex items-end gap-2">
+                  {analyticsLevel !== 'company' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const enabled = !analyticsComparisonEnabled;
+                        setAnalyticsComparisonEnabled(enabled);
+                        if (!enabled) {
+                          setAnalyticsCompareTeamId('');
+                          setAnalyticsCompareUserId('');
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${
+                        analyticsComparisonEnabled
+                          ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {analyticsComparisonEnabled ? 'Hide Comparison' : 'Compare'}
+                    </button>
+                  )}
                   <button
                     onClick={fetchAnalytics}
                     disabled={loadingAnalytics}
-                    className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                    className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
                   >
                     {loadingAnalytics ? 'Loading...' : 'Refresh'}
                   </button>
@@ -1375,6 +1458,38 @@ const AdminDashboard = () => {
               </div>
             ) : analyticsData ? (
               <>
+                {analyticsData.comparisonMode ? (
+                  <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h3 className="text-xl font-bold text-gray-900">Comparison Data Loaded</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {analyticsRange === 'all' ? 'All time' : `Last ${analyticsRange} days`}
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                      <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Primary</p>
+                        <p className="text-sm font-semibold text-gray-900 mt-2">
+                          {analyticsData.primaryScope?.scopeLabel || 'Not available'}
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Total reports: {analyticsData.primaryScope?.summary?.totalReports ?? 0}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Secondary</p>
+                        <p className="text-sm font-semibold text-gray-900 mt-2">
+                          {analyticsData.secondaryScope?.scopeLabel || 'Not available'}
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Total reports: {analyticsData.secondaryScope?.summary?.totalReports ?? 0}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-6 rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-600">
+                      Comparison filters and request state are now wired up. The merged comparison visualisation will be added in the next implementation step.
+                    </div>
+                  </div>
+                ) : (
+                  <>
                 {/* Scope Label */}
                 <div className="mb-4">
                   <h3 className="text-xl font-bold text-gray-900">{analyticsData.scopeLabel}</h3>
@@ -1761,6 +1876,8 @@ const AdminDashboard = () => {
                       </table>
                     </div>
                   </div>
+                )}
+                  </>
                 )}
               </>
             ) : (
