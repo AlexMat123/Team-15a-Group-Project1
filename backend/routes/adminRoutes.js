@@ -132,296 +132,402 @@ const getAdminAnalyticsScopeConfig = (range) => {
   };
 };
 
-// GET /api/admin/analytics?level=company|team|user&teamId=xxx&userId=xxx&range=7|30|90|all
+const buildAdminAnalyticsPayload = async ({ filter, scopeLabel, scopeDetails, range }) => {
+  const scopeConfig = getAdminAnalyticsScopeConfig(range);
+  const reportFilter = { ...filter };
+
+  if (scopeConfig.startDate) {
+    reportFilter.createdAt = { $gte: scopeConfig.startDate };
+  }
+
+  const reports = await Report.find(reportFilter)
+    .select('filename status errorCount errorSummary timeSaved qualityAssessment createdAt analyzedBy errors')
+    .populate('analyzedBy', 'name email')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const summary = {
+    totalReports: reports.length,
+    analyzedReports: 0,
+    pendingReports: 0,
+    failedReports: 0,
+    totalErrors: 0,
+    averageErrorsPerReport: 0,
+    totalTimeSaved: 0,
+  };
+
+  const errorBreakdown = {
+    placeholder: 0,
+    consistency: 0,
+    compliance: 0,
+    formatting: 0,
+    missing_data: 0,
+  };
+  const qualityBreakdown = { good: 0, bad: 0, uncertain: 0 };
+  const checklistFailureCounts = new Map();
+  const errorTypesByReport = {
+    placeholder: 0,
+    consistency: 0,
+    compliance: 0,
+    formatting: 0,
+    missing_data: 0,
+  };
+
+  const trendBuckets = new Map();
+  const bucketDates = [];
+
+  if (scopeConfig.range === 'all') {
+    const now = new Date();
+    const oldestReportDate = reports.length
+      ? new Date(reports[reports.length - 1].createdAt)
+      : now;
+    const firstBucketDate = new Date(
+      Date.UTC(oldestReportDate.getUTCFullYear(), oldestReportDate.getUTCMonth(), 1)
+    );
+    const lastBucketDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+    for (
+      let bucketDate = new Date(firstBucketDate);
+      bucketDate <= lastBucketDate;
+      bucketDate = new Date(Date.UTC(bucketDate.getUTCFullYear(), bucketDate.getUTCMonth() + 1, 1))
+    ) {
+      bucketDates.push(bucketDate);
+    }
+  } else {
+    for (let offset = 0; offset < scopeConfig.bucketCount; offset += 1) {
+      bucketDates.push(scopeConfig.getBucketDate(offset));
+    }
+  }
+
+  bucketDates.forEach((bucketDate) => {
+    const key = scopeConfig.getBucketKey(bucketDate);
+    trendBuckets.set(key, {
+      periodKey: key,
+      periodLabel: scopeConfig.formatBucketLabel(bucketDate),
+      reportCount: 0,
+      errorCount: 0,
+      analyzedCount: 0,
+      passedCount: 0,
+      failedCount: 0,
+    });
+  });
+
+  const userStats = new Map();
+
+  reports.forEach((report) => {
+    summary.totalErrors += report.errorCount || 0;
+    summary.totalTimeSaved += report.timeSaved || 0;
+
+    if (report.status === 'analyzed') {
+      summary.analyzedReports += 1;
+    } else if (report.status === 'failed') {
+      summary.failedReports += 1;
+    } else {
+      summary.pendingReports += 1;
+    }
+
+    errorBreakdown.placeholder += report.errorSummary?.placeholder || 0;
+    errorBreakdown.consistency += report.errorSummary?.consistency || 0;
+    errorBreakdown.compliance += report.errorSummary?.compliance || 0;
+    errorBreakdown.formatting += report.errorSummary?.formatting || 0;
+    errorBreakdown.missing_data += report.errorSummary?.missing_data || 0;
+    if ((report.errorSummary?.placeholder || 0) > 0) errorTypesByReport.placeholder += 1;
+    if ((report.errorSummary?.consistency || 0) > 0) errorTypesByReport.consistency += 1;
+    if ((report.errorSummary?.compliance || 0) > 0) errorTypesByReport.compliance += 1;
+    if ((report.errorSummary?.formatting || 0) > 0) errorTypesByReport.formatting += 1;
+    if ((report.errorSummary?.missing_data || 0) > 0) errorTypesByReport.missing_data += 1;
+
+    const qualityLabel = report.qualityAssessment?.label;
+    if (qualityLabel && qualityBreakdown[qualityLabel] !== undefined) {
+      qualityBreakdown[qualityLabel] += 1;
+    }
+
+    (report.errors || []).forEach((error) => {
+      if (error?.message) {
+        checklistFailureCounts.set(error.message, (checklistFailureCounts.get(error.message) || 0) + 1);
+      }
+    });
+
+    const createdAt = new Date(report.createdAt);
+    const bucketKey = scopeConfig.getBucketKey(createdAt);
+    const existingBucket = trendBuckets.get(bucketKey);
+    if (existingBucket) {
+      existingBucket.reportCount += 1;
+      existingBucket.errorCount += report.errorCount || 0;
+      if (report.status === 'analyzed') {
+        existingBucket.analyzedCount += 1;
+        if (report.qualityAssessment?.label === 'good') existingBucket.passedCount += 1;
+        if (report.qualityAssessment?.label === 'bad') existingBucket.failedCount += 1;
+      }
+    }
+
+    if (report.analyzedBy) {
+      const odId = report.analyzedBy._id?.toString() || report.analyzedBy.toString();
+      if (!userStats.has(odId)) {
+        userStats.set(odId, {
+          odId,
+          userName: report.analyzedBy.name || 'Unknown',
+          userEmail: report.analyzedBy.email || '',
+          reportCount: 0,
+          errorCount: 0,
+          passedCount: 0,
+          failedCount: 0,
+        });
+      }
+      const userStat = userStats.get(odId);
+      userStat.reportCount += 1;
+      userStat.errorCount += report.errorCount || 0;
+      if (report.qualityAssessment?.label === 'good') userStat.passedCount += 1;
+      if (report.qualityAssessment?.label === 'bad') userStat.failedCount += 1;
+    }
+  });
+
+  if (summary.analyzedReports > 0) {
+    summary.averageErrorsPerReport = Number(
+      (summary.totalErrors / summary.analyzedReports).toFixed(2)
+    );
+  }
+
+  const passRate = summary.analyzedReports > 0
+    ? Number(((qualityBreakdown.good / summary.analyzedReports) * 100).toFixed(1))
+    : 0;
+
+  const manualTime = parseFloat((summary.totalTimeSaved / 0.16).toFixed(1));
+  const timeSavedPercent = manualTime > 0
+    ? Math.round((summary.totalTimeSaved / manualTime) * 100)
+    : 0;
+
+  const errorBreakdownArray = [
+    { name: 'Placeholder', value: errorBreakdown.placeholder },
+    { name: 'Consistency', value: errorBreakdown.consistency },
+    { name: 'Compliance', value: errorBreakdown.compliance },
+    { name: 'Formatting', value: errorBreakdown.formatting },
+    { name: 'Missing Data', value: errorBreakdown.missing_data },
+  ];
+
+  const topErrors = Array.from(checklistFailureCounts.entries())
+    .map(([message, count]) => ({ message, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  const checklistFailureBreakdown = Array.from(checklistFailureCounts.entries())
+    .map(([message, count]) => ({ message, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  const mostCommonErrorTypes = Object.entries(errorBreakdown)
+    .map(([type, count]) => ({
+      type,
+      count,
+      reportsAffected: errorTypesByReport[type] || 0,
+    }))
+    .sort((a, b) => {
+      if (b.count !== a.count) {
+        return b.count - a.count;
+      }
+
+      return b.reportsAffected - a.reportsAffected;
+    });
+
+  const passFailRateTrends = Array.from(trendBuckets.values()).map((bucket) => ({
+    periodKey: bucket.periodKey,
+    periodLabel: bucket.periodLabel,
+    analyzedCount: bucket.analyzedCount,
+    passedCount: bucket.passedCount,
+    failedCount: bucket.failedCount,
+    passRate:
+      bucket.analyzedCount > 0
+        ? Number(((bucket.passedCount / bucket.analyzedCount) * 100).toFixed(1))
+        : 0,
+  }));
+
+  const qualityScoreTrend = reports
+    .filter((report) => report.status === 'analyzed')
+    .map((report) => ({
+      _id: report._id,
+      filename: report.filename,
+      createdAt: report.createdAt,
+      qualityLabel: report.qualityAssessment?.label || null,
+      qualityScore: Number(((report.qualityAssessment?.goodScore || 0) * 100).toFixed(1)),
+    }))
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .slice(-10);
+
+  const trendData = Array.from(trendBuckets.values()).map((bucket) => ({
+    periodKey: bucket.periodKey,
+    period: bucket.periodLabel,
+    reports: bucket.reportCount,
+    errors: bucket.errorCount,
+    passed: bucket.passedCount,
+    failed: bucket.failedCount,
+    passRate:
+      bucket.analyzedCount > 0
+        ? Number(((bucket.passedCount / bucket.analyzedCount) * 100).toFixed(1))
+        : 0,
+  }));
+
+  const userLeaderboard = Array.from(userStats.values())
+    .map((userStat) => ({
+      ...userStat,
+      passRate: userStat.reportCount > 0
+        ? Number(((userStat.passedCount / userStat.reportCount) * 100).toFixed(1))
+        : 0,
+    }))
+    .sort((a, b) => b.reportCount - a.reportCount)
+    .slice(0, 10);
+
+  const recentReports = reports.slice(0, 10).map((report) => ({
+    _id: report._id,
+    filename: report.filename,
+    status: report.status,
+    errorCount: report.errorCount || 0,
+    qualityLabel: report.qualityAssessment?.label || null,
+    analyzedBy: report.analyzedBy?.name || 'Unknown',
+    createdAt: report.createdAt,
+  }));
+
+  return {
+    scopeLabel,
+    scopeDetails,
+    summary: {
+      ...summary,
+      passRate,
+      manualTime,
+      aiTime: Math.round(manualTime - summary.totalTimeSaved),
+      timeSavedPercent,
+    },
+    errorBreakdown: errorBreakdownArray,
+    qualityBreakdown,
+    trendData,
+    passFailRateTrends,
+    qualityScoreTrend,
+    mostCommonErrorTypes,
+    checklistFailureBreakdown,
+    topErrors,
+    userLeaderboard,
+    recentReports,
+  };
+};
+
+const resolveAdminAnalyticsScope = async ({ level, entityId }) => {
+  if (level === 'team' && entityId) {
+    const team = await Team.findById(entityId).populate('members', 'name email').lean();
+    if (!team) {
+      return null;
+    }
+
+    return {
+      filter: { analyzedBy: { $in: team.members.map((member) => member._id) } },
+      scopeLabel: `Team: ${team.name}`,
+      scopeDetails: {
+        teamId: team._id,
+        teamName: team.name,
+        memberCount: team.members.length,
+      },
+    };
+  }
+
+  if (level === 'user' && entityId) {
+    const targetUser = await User.findById(entityId).select('name email role').lean();
+    if (!targetUser) {
+      return null;
+    }
+
+    return {
+      filter: { analyzedBy: entityId },
+      scopeLabel: `User: ${targetUser.name}`,
+      scopeDetails: {
+        userId: targetUser._id,
+        userName: targetUser.name,
+        userEmail: targetUser.email,
+        userRole: targetUser.role,
+      },
+    };
+  }
+
+  return {
+    filter: {},
+    scopeLabel: 'Company-wide',
+    scopeDetails: null,
+  };
+};
+
+// GET /api/admin/analytics?level=company|team|user&teamId=xxx&userId=xxx&compareTeamId=xxx&compareUserId=xxx&range=7|30|90|all
 router.get('/analytics', protect, authorize('admin'), async (req, res) => {
   try {
-    const { level = 'company', teamId, userId, range = '30' } = req.query;
+    const {
+      level = 'company',
+      teamId,
+      userId,
+      compareTeamId,
+      compareUserId,
+      range = '30',
+    } = req.query;
 
-    const filter = {};
-    let scopeLabel = 'Company-wide';
-    let scopeDetails = null;
-    const scopeConfig = getAdminAnalyticsScopeConfig(range);
+    const comparisonType = level === 'team' ? 'team' : level === 'user' ? 'user' : null;
+    const comparisonId = comparisonType === 'team' ? compareTeamId : compareUserId;
+    const primaryId = comparisonType === 'team' ? teamId : comparisonType === 'user' ? userId : null;
+    const comparisonMode = Boolean(comparisonType && primaryId && comparisonId);
 
-    if (scopeConfig.startDate) {
-      filter.createdAt = { $gte: scopeConfig.startDate };
+    if (comparisonMode && primaryId === comparisonId) {
+      return res.status(400).json({ message: 'Comparison requires two different selections' });
     }
 
-    if (level === 'team' && teamId) {
-      const team = await Team.findById(teamId).populate('members', 'name email').lean();
-      if (team) {
-        const memberIds = team.members.map((m) => m._id);
-        filter.analyzedBy = { $in: memberIds };
-        scopeLabel = `Team: ${team.name}`;
-        scopeDetails = { teamId: team._id, teamName: team.name, memberCount: team.members.length };
-      }
-    } else if (level === 'user' && userId) {
-      const targetUser = await User.findById(userId).select('name email role').lean();
-      if (targetUser) {
-        filter.analyzedBy = userId;
-        scopeLabel = `User: ${targetUser.name}`;
-        scopeDetails = { userId: targetUser._id, userName: targetUser.name, userEmail: targetUser.email, userRole: targetUser.role };
-      }
-    }
-
-    const reports = await Report.find(filter)
-      .select('filename status errorCount errorSummary timeSaved qualityAssessment createdAt analyzedBy errors')
-      .populate('analyzedBy', 'name email')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const summary = {
-      totalReports: reports.length,
-      analyzedReports: 0,
-      pendingReports: 0,
-      failedReports: 0,
-      totalErrors: 0,
-      averageErrorsPerReport: 0,
-      totalTimeSaved: 0,
-    };
-
-    const errorBreakdown = {
-      placeholder: 0,
-      consistency: 0,
-      compliance: 0,
-      formatting: 0,
-      missing_data: 0,
-    };
-
-    const qualityBreakdown = { good: 0, bad: 0, uncertain: 0 };
-    const checklistFailureCounts = new Map();
-    const errorTypesByReport = {
-      placeholder: 0,
-      consistency: 0,
-      compliance: 0,
-      formatting: 0,
-      missing_data: 0,
-    };
-
-    const trendBuckets = new Map();
-    const bucketDates = [];
-
-    if (scopeConfig.range === 'all') {
-      const now = new Date();
-      const oldestReportDate = reports.length
-        ? new Date(reports[reports.length - 1].createdAt)
-        : now;
-      const firstBucketDate = new Date(
-        Date.UTC(oldestReportDate.getUTCFullYear(), oldestReportDate.getUTCMonth(), 1)
-      );
-      const lastBucketDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-
-      for (
-        let bucketDate = new Date(firstBucketDate);
-        bucketDate <= lastBucketDate;
-        bucketDate = new Date(Date.UTC(bucketDate.getUTCFullYear(), bucketDate.getUTCMonth() + 1, 1))
-      ) {
-        bucketDates.push(bucketDate);
-      }
-    } else {
-      for (let offset = 0; offset < scopeConfig.bucketCount; offset += 1) {
-        bucketDates.push(scopeConfig.getBucketDate(offset));
-      }
-    }
-
-    bucketDates.forEach((bucketDate) => {
-      const key = scopeConfig.getBucketKey(bucketDate);
-      trendBuckets.set(key, {
-        periodLabel: scopeConfig.formatBucketLabel(bucketDate),
-        reportCount: 0,
-        errorCount: 0,
-        analyzedCount: 0,
-        passedCount: 0,
-        failedCount: 0,
-      });
+    const primaryScope = await resolveAdminAnalyticsScope({
+      level,
+      entityId: comparisonType ? primaryId : null,
     });
 
-    const userStats = new Map();
-
-    reports.forEach((report) => {
-      summary.totalErrors += report.errorCount || 0;
-      summary.totalTimeSaved += report.timeSaved || 0;
-
-      if (report.status === 'analyzed') {
-        summary.analyzedReports += 1;
-      } else if (report.status === 'failed') {
-        summary.failedReports += 1;
-      } else {
-        summary.pendingReports += 1;
-      }
-
-      errorBreakdown.placeholder += report.errorSummary?.placeholder || 0;
-      errorBreakdown.consistency += report.errorSummary?.consistency || 0;
-      errorBreakdown.compliance += report.errorSummary?.compliance || 0;
-      errorBreakdown.formatting += report.errorSummary?.formatting || 0;
-      errorBreakdown.missing_data += report.errorSummary?.missing_data || 0;
-      if ((report.errorSummary?.placeholder || 0) > 0) errorTypesByReport.placeholder += 1;
-      if ((report.errorSummary?.consistency || 0) > 0) errorTypesByReport.consistency += 1;
-      if ((report.errorSummary?.compliance || 0) > 0) errorTypesByReport.compliance += 1;
-      if ((report.errorSummary?.formatting || 0) > 0) errorTypesByReport.formatting += 1;
-      if ((report.errorSummary?.missing_data || 0) > 0) errorTypesByReport.missing_data += 1;
-
-      const qualityLabel = report.qualityAssessment?.label;
-      if (qualityLabel && qualityBreakdown[qualityLabel] !== undefined) {
-        qualityBreakdown[qualityLabel] += 1;
-      }
-
-      (report.errors || []).forEach((error) => {
-        if (error?.message) {
-          const count = checklistFailureCounts.get(error.message) || 0;
-          checklistFailureCounts.set(error.message, count + 1);
-        }
-      });
-
-      const createdAt = new Date(report.createdAt);
-      const bucketKey = scopeConfig.getBucketKey(createdAt);
-      const existingBucket = trendBuckets.get(bucketKey);
-      if (existingBucket) {
-        existingBucket.reportCount += 1;
-        existingBucket.errorCount += report.errorCount || 0;
-        if (report.status === 'analyzed') {
-          existingBucket.analyzedCount += 1;
-          if (report.qualityAssessment?.label === 'good') existingBucket.passedCount += 1;
-          if (report.qualityAssessment?.label === 'bad') existingBucket.failedCount += 1;
-        }
-      }
-
-      if (report.analyzedBy) {
-        const odId = report.analyzedBy._id?.toString() || report.analyzedBy.toString();
-        if (!userStats.has(odId)) {
-          userStats.set(odId, {
-            odId,
-            userName: report.analyzedBy.name || 'Unknown',
-            userEmail: report.analyzedBy.email || '',
-            reportCount: 0,
-            errorCount: 0,
-            passedCount: 0,
-            failedCount: 0,
-          });
-        }
-        const us = userStats.get(odId);
-        us.reportCount += 1;
-        us.errorCount += report.errorCount || 0;
-        if (report.qualityAssessment?.label === 'good') us.passedCount += 1;
-        if (report.qualityAssessment?.label === 'bad') us.failedCount += 1;
-      }
-    });
-
-    if (summary.analyzedReports > 0) {
-      summary.averageErrorsPerReport = Number((summary.totalErrors / summary.analyzedReports).toFixed(2));
+    if (!primaryScope) {
+      return res.status(404).json({ message: `${comparisonType === 'team' ? 'Team' : 'User'} not found` });
     }
 
-    const passRate = summary.analyzedReports > 0
-      ? Number(((qualityBreakdown.good / summary.analyzedReports) * 100).toFixed(1))
-      : 0;
-
-    const manualTime = parseFloat((summary.totalTimeSaved / 0.16).toFixed(1));
-    const timeSavedPercent = manualTime > 0 ? Math.round((summary.totalTimeSaved / manualTime) * 100) : 0;
-
-    const errorBreakdownArray = [
-      { name: 'Placeholder', value: errorBreakdown.placeholder },
-      { name: 'Consistency', value: errorBreakdown.consistency },
-      { name: 'Compliance', value: errorBreakdown.compliance },
-      { name: 'Formatting', value: errorBreakdown.formatting },
-      { name: 'Missing Data', value: errorBreakdown.missing_data },
-    ];
-
-    const topErrors = Array.from(checklistFailureCounts.entries())
-      .map(([message, count]) => ({ message, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-
-    const checklistFailureBreakdown = Array.from(checklistFailureCounts.entries())
-      .map(([message, count]) => ({ message, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    const mostCommonErrorTypes = Object.entries(errorBreakdown)
-      .map(([type, count]) => ({
-        type,
-        count,
-        reportsAffected: errorTypesByReport[type] || 0,
-      }))
-      .sort((a, b) => {
-        if (b.count !== a.count) {
-          return b.count - a.count;
-        }
-
-        return b.reportsAffected - a.reportsAffected;
+    if (!comparisonMode) {
+      const payload = await buildAdminAnalyticsPayload({
+        filter: primaryScope.filter,
+        scopeLabel: primaryScope.scopeLabel,
+        scopeDetails: primaryScope.scopeDetails,
+        range,
       });
 
-    const passFailRateTrends = Array.from(trendBuckets.values()).map((bucket) => ({
-      periodLabel: bucket.periodLabel,
-      analyzedCount: bucket.analyzedCount,
-      passedCount: bucket.passedCount,
-      failedCount: bucket.failedCount,
-      passRate:
-        bucket.analyzedCount > 0
-          ? Number(((bucket.passedCount / bucket.analyzedCount) * 100).toFixed(1))
-          : 0,
-    }));
+      return res.json({
+        level,
+        range,
+        ...payload,
+      });
+    }
 
-    const qualityScoreTrend = reports
-      .filter((report) => report.status === 'analyzed')
-      .map((report) => ({
-        _id: report._id,
-        filename: report.filename,
-        createdAt: report.createdAt,
-        qualityLabel: report.qualityAssessment?.label || null,
-        qualityScore: Number(((report.qualityAssessment?.goodScore || 0) * 100).toFixed(1)),
-      }))
-      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-      .slice(-10);
+    const secondaryScope = await resolveAdminAnalyticsScope({
+      level,
+      entityId: comparisonId,
+    });
 
-    const trendData = Array.from(trendBuckets.values())
-      .map((bucket) => ({
-        period: bucket.periodLabel,
-        reports: bucket.reportCount,
-        errors: bucket.errorCount,
-        passed: bucket.passedCount,
-        failed: bucket.failedCount,
-        passRate: bucket.analyzedCount > 0 ? Number(((bucket.passedCount / bucket.analyzedCount) * 100).toFixed(1)) : 0,
-      }));
+    if (!secondaryScope) {
+      return res.status(404).json({ message: `${comparisonType === 'team' ? 'Team' : 'User'} not found` });
+    }
 
-    const userLeaderboard = Array.from(userStats.values())
-      .map((us) => ({
-        ...us,
-        passRate: us.reportCount > 0 ? Number(((us.passedCount / us.reportCount) * 100).toFixed(1)) : 0,
-      }))
-      .sort((a, b) => b.reportCount - a.reportCount)
-      .slice(0, 10);
+    const [primaryPayload, secondaryPayload] = await Promise.all([
+      buildAdminAnalyticsPayload({
+        filter: primaryScope.filter,
+        scopeLabel: primaryScope.scopeLabel,
+        scopeDetails: primaryScope.scopeDetails,
+        range,
+      }),
+      buildAdminAnalyticsPayload({
+        filter: secondaryScope.filter,
+        scopeLabel: secondaryScope.scopeLabel,
+        scopeDetails: secondaryScope.scopeDetails,
+        range,
+      }),
+    ]);
 
-    const recentReports = reports.slice(0, 10).map((r) => ({
-      _id: r._id,
-      filename: r.filename,
-      status: r.status,
-      errorCount: r.errorCount || 0,
-      qualityLabel: r.qualityAssessment?.label || null,
-      analyzedBy: r.analyzedBy?.name || 'Unknown',
-      createdAt: r.createdAt,
-    }));
-
-    res.json({
+    return res.json({
       level,
       range,
-      scopeLabel,
-      scopeDetails,
-      summary: {
-        ...summary,
-        passRate,
-        manualTime,
-        aiTime: Math.round(manualTime - summary.totalTimeSaved),
-        timeSavedPercent,
-      },
-      errorBreakdown: errorBreakdownArray,
-      qualityBreakdown,
-      trendData,
-      passFailRateTrends,
-      qualityScoreTrend,
-      mostCommonErrorTypes,
-      checklistFailureBreakdown,
-      topErrors,
-      userLeaderboard,
-      recentReports,
+      comparisonMode: true,
+      comparisonType,
+      primaryScope: primaryPayload,
+      secondaryScope: secondaryPayload,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

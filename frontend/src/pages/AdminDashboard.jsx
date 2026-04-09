@@ -507,7 +507,13 @@ const AdminDashboard = () => {
     if (activeTab === 'analytics') {
       fetchAnalytics();
     }
-  }, [activeTab, analyticsLevel, analyticsTeamId, analyticsUserId, analyticsRange]);
+  }, [
+    activeTab,
+    analyticsLevel,
+    analyticsTeamId,
+    analyticsUserId,
+    analyticsRange,
+  ]);
 
   const stats = [
     { label: 'Total Users', value: users.length, icon: Users, color: 'bg-blue-500' },
