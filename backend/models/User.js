@@ -1,5 +1,41 @@
 const mongoose = require('mongoose');
 
+const userPreferencesSchema = new mongoose.Schema(
+  {
+    theme: {
+      type: String,
+      enum: ['light', 'dark'],
+      default: 'light',
+    },
+    highContrast: {
+      type: Boolean,
+      default: false,
+    },
+    fontSize: {
+      type: Number,
+      default: 100,
+      min: 80,
+      max: 150,
+    },
+    colorblindMode: {
+      type: String,
+      enum: ['none', 'protanopia', 'deuteranopia', 'tritanopia', 'achromatopsia'],
+      default: 'none',
+    },
+    reducedMotion: {
+      type: Boolean,
+      default: false,
+    },
+    notifications: {
+      teamAssignment: { type: Boolean, default: true },
+      teamRemoval: { type: Boolean, default: true },
+      reportComplete: { type: Boolean, default: true },
+      weeklySummary: { type: Boolean, default: false },
+    },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -40,6 +76,10 @@ const userSchema = new mongoose.Schema(
     },
     lastLogin: {
       type: Date,
+    },
+    preferences: {
+      type: userPreferencesSchema,
+      default: () => ({}),
     },
   },
   {
