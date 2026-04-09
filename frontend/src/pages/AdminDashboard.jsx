@@ -642,13 +642,13 @@ const AdminDashboard = () => {
               ))}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-              <div className="rounded-xl bg-white border border-gray-200 p-4">
-                <p className="text-sm text-gray-500">Analyzed Reports</p>
-                <p className="text-2xl font-semibold text-gray-900 mt-2">{summary?.analyzedReports ?? 0}</p>
+              <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Analyzed Reports</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">{summary?.analyzedReports ?? 0}</p>
               </div>
-              <div className="rounded-xl bg-white border border-gray-200 p-4">
-                <p className="text-sm text-gray-500">Overall Average Errors</p>
-                <p className="text-2xl font-semibold text-gray-900 mt-2">{summary?.averageErrorsPerReport ?? 0}</p>
+              <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Overall Average Errors</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">{summary?.averageErrorsPerReport ?? 0}</p>
               </div>
             </div>
           </div>
@@ -743,9 +743,9 @@ const AdminDashboard = () => {
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {analytics.recentReports.map((report) => (
-                    <tr key={report._id} className="hover:bg-gray-50">
+                    <tr key={report._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">{report.filename}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -1285,7 +1285,7 @@ const AdminDashboard = () => {
                 )}
 
                 {/* Individual User Profile Stats */}
-                <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-8">
                   {renderUserProfileStats(userProfileAnalytics, userProfileLoading)}
                 </div>
               </>
@@ -1293,14 +1293,14 @@ const AdminDashboard = () => {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                   {stats.map((stat) => (
-                    <div key={stat.label} className="bg-white rounded-xl shadow-sm p-6">
+                    <div key={stat.label} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
                       <div className="flex items-center">
                         <div className={`${stat.color} p-3 rounded-lg`}>
                           <stat.icon className="w-6 h-6 text-white" />
                         </div>
                         <div className="ml-4">
-                          <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                          <p className="text-sm text-gray-500">{stat.label}</p>
+                          <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
                         </div>
                       </div>
                     </div>
@@ -1310,23 +1310,23 @@ const AdminDashboard = () => {
                 {/* Quality breakdown */}
                 {dashboardStats.qualityBreakdown && (
                   <div className="grid grid-cols-3 gap-4 mb-8">
-                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
-                      <p className="text-2xl font-bold text-green-600">{dashboardStats.qualityBreakdown.passed}</p>
-                      <p className="text-sm text-gray-500">Passed</p>
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border-l-4 border-green-500">
+                      <p className="text-2xl font-bold text-green-600 dark:text-green-400">{dashboardStats.qualityBreakdown.passed}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Passed</p>
                     </div>
-                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-red-500">
-                      <p className="text-2xl font-bold text-red-600">{dashboardStats.qualityBreakdown.failed}</p>
-                      <p className="text-sm text-gray-500">Failed</p>
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border-l-4 border-red-500">
+                      <p className="text-2xl font-bold text-red-600 dark:text-red-400">{dashboardStats.qualityBreakdown.failed}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Failed</p>
                     </div>
-                    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-amber-500">
-                      <p className="text-2xl font-bold text-amber-600">{dashboardStats.qualityBreakdown.uncertain}</p>
-                      <p className="text-sm text-gray-500">Uncertain</p>
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border-l-4 border-amber-500">
+                      <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{dashboardStats.qualityBreakdown.uncertain}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Uncertain</p>
                     </div>
                   </div>
                 )}
 
                 {loadingReports ? (
-                  <div className="bg-white rounded-xl shadow-sm p-6 mb-8 text-sm text-gray-500">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-8 text-sm text-gray-500 dark:text-gray-400">
                     Loading analytics...
                   </div>
                 ) : (
@@ -2043,13 +2043,13 @@ const AdminDashboard = () => {
             {reportsError && <p className="mb-4 text-sm text-red-600">{reportsError}</p>}
 
             {loadingReports ? (
-              <div className="bg-white rounded-xl shadow-sm p-6 text-sm text-gray-500">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 text-sm text-gray-500 dark:text-gray-400">
                 Loading reports...
               </div>
             ) : (
               <div className="space-y-4">
                 {filteredReports.map((report) => (
-                  <div key={report._id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700p-6 hover:border-indigo-400 transition-colors">
+                  <div key={report._id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:border-indigo-400 transition-colors">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
@@ -2399,11 +2399,11 @@ const AdminDashboard = () => {
             {/* Manage Team Modal */}
             {manageTeamId && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-sm">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     {teams.find(t => t._id === manageTeamId)?.name}
                   </h3>
-                  <p className="text-sm text-gray-500 mb-5">Choose an action for this team</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">Choose an action for this team</p>
                   <div className="flex flex-col gap-2">
                     <button onClick={handleOpenAddMembers} className="w-full text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
                       Add Members
@@ -2423,7 +2423,7 @@ const AdminDashboard = () => {
                   </div>
                   <button
                     onClick={() => setManageTeamId(null)}
-                    className="mt-4 w-full text-sm text-gray-600 border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-50"
+                    className="mt-4 w-full text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
                     Close
                   </button>
@@ -2432,15 +2432,15 @@ const AdminDashboard = () => {
                 {/* Confirm Delete Team */}
                 {confirmDeleteTeam && (
                   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                    <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Team</h3>
-                      <p className="text-sm text-gray-600 mb-5">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-sm">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Delete Team</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mb-5">
                         Are you sure you want to delete <span className="font-semibold">{teams.find(t => t._id === manageTeamId)?.name}</span>? This will remove the team and all its member associations. This action cannot be undone.
                       </p>
                       <div className="flex justify-end gap-3">
                         <button
                           onClick={() => setConfirmDeleteTeam(false)}
-                          className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                          className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                         >
                           Cancel
                         </button>
@@ -2460,7 +2460,7 @@ const AdminDashboard = () => {
             {/* Add Members Overlay */}
             {showAddMembers && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">Add Members</h3>
                   <p className="text-sm text-gray-500 mb-4">
                     {teams.find(t => t._id === manageTeamId)?.name}
@@ -2525,7 +2525,7 @@ const AdminDashboard = () => {
               const members = team?.members || [];
               return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                  <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">Team Members</h3>
                     <p className="text-sm text-gray-500 mb-4">{team?.name}</p>
                     {members.length === 0 ? (
@@ -2569,7 +2569,7 @@ const AdminDashboard = () => {
                   {/* Confirm Remove Member */}
                   {confirmRemoveMember && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
-                      <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
+                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-sm">
                         <h3 className="text-lg font-semibold text-gray-900 mb-2">Remove Member</h3>
                         <p className="text-sm text-gray-600 mb-5">
                           Are you sure you want to remove <span className="font-semibold">{confirmRemoveMember.name}</span> from this team? This action cannot be undone.
@@ -2601,7 +2601,7 @@ const AdminDashboard = () => {
               const members = team?.members || [];
               return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                  <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-md max-h-[80vh] flex flex-col">
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">Assign Team Lead</h3>
                     <p className="text-sm text-gray-500 mb-4">{team?.name}</p>
                     {members.length === 0 ? (
@@ -2663,7 +2663,7 @@ const AdminDashboard = () => {
                   {/* Confirm Assign Lead */}
                   {confirmLead && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
-                      <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
+                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-sm">
                         <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Team Lead</h3>
                         <p className="text-sm text-gray-600 mb-5">
                           Are you sure you want to assign <span className="font-semibold">{confirmLead.name}</span> as the team lead for <span className="font-semibold">{team?.name}</span>?
@@ -2692,7 +2692,7 @@ const AdminDashboard = () => {
             {/* Team Analytics Overlay */}
             {showTeamAnalytics && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
                   <div className="flex justify-between items-start mb-5">
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">Team Analytics</h3>
@@ -2820,47 +2820,47 @@ const AdminDashboard = () => {
                     <>
                       {/* Stat cards */}
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                        <div className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl p-4">
                           <div className="flex items-center">
                             <div className="bg-blue-500 p-2.5 rounded-lg">
                               <Users className="w-5 h-5 text-white" />
                             </div>
                             <div className="ml-3">
-                              <p className="text-xl font-bold text-gray-900">{teamStats.totalMembers}</p>
-                              <p className="text-xs text-gray-500">Members</p>
+                              <p className="text-xl font-bold text-gray-900 dark:text-white">{teamStats.totalMembers}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Members</p>
                             </div>
                           </div>
                         </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                        <div className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl p-4">
                           <div className="flex items-center">
                             <div className="bg-green-500 p-2.5 rounded-lg">
                               <FileText className="w-5 h-5 text-white" />
                             </div>
                             <div className="ml-3">
-                              <p className="text-xl font-bold text-gray-900">{teamStats.totalReports}</p>
-                              <p className="text-xs text-gray-500">Reports</p>
+                              <p className="text-xl font-bold text-gray-900 dark:text-white">{teamStats.totalReports}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Reports</p>
                             </div>
                           </div>
                         </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                        <div className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl p-4">
                           <div className="flex items-center">
                             <div className="bg-red-500 p-2.5 rounded-lg">
                               <AlertTriangle className="w-5 h-5 text-white" />
                             </div>
                             <div className="ml-3">
-                              <p className="text-xl font-bold text-gray-900">{teamStats.totalErrors}</p>
-                              <p className="text-xs text-gray-500">Errors Found</p>
+                              <p className="text-xl font-bold text-gray-900 dark:text-white">{teamStats.totalErrors}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Errors Found</p>
                             </div>
                           </div>
                         </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-4">
+                        <div className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl p-4">
                           <div className="flex items-center">
                             <div className="bg-amber-500 p-2.5 rounded-lg">
                               <Clock className="w-5 h-5 text-white" />
                             </div>
                             <div className="ml-3">
-                              <p className="text-xl font-bold text-gray-900">{teamStats.timeSaved}h</p>
-                              <p className="text-xs text-gray-500">Time Saved</p>
+                              <p className="text-xl font-bold text-gray-900 dark:text-white">{teamStats.timeSaved}h</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Time Saved</p>
                             </div>
                           </div>
                         </div>
@@ -3048,7 +3048,7 @@ const AdminDashboard = () => {
             {/* Create Team Modal */}
             {showCreateTeamModal && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-md">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Create a New Team</h3>
                   <form onSubmit={handleCreateTeam}>
                     <input
@@ -3089,8 +3089,8 @@ const AdminDashboard = () => {
 
       {showCreateUserModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-start justify-between border-b border-gray-200 px-6 py-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-800 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">Create New User</h2>
                 <p className="mt-1 text-sm text-gray-600">
