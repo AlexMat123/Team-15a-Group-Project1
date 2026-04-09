@@ -169,31 +169,31 @@ const Profile = () => {
     {
       key: 'placeholder',
       label: 'Placeholder',
-      valueClass: 'text-orange-600',
+      valueClass: 'text-orange-600 dark:text-orange-800',
       cardClass: 'bg-orange-50',
     },
     {
       key: 'consistency',
       label: 'Consistency',
-      valueClass: 'text-blue-600',
+      valueClass: 'text-blue-600 dark:text-blue-800',
       cardClass: 'bg-blue-50',
     },
     {
       key: 'compliance',
       label: 'Compliance',
-      valueClass: 'text-red-600',
+      valueClass: 'text-red-600 dark:text-red-800',
       cardClass: 'bg-red-50',
     },
     {
       key: 'formatting',
       label: 'Formatting',
-      valueClass: 'text-purple-600',
+      valueClass: 'text-purple-600 dark:text-purple-800',
       cardClass: 'bg-purple-50',
     },
     {
       key: 'missing_data',
       label: 'Missing Data',
-      valueClass: 'text-green-600',
+      valueClass: 'text-green-600 dark:text-green-800',
       cardClass: 'bg-green-50',
     },
   ];
@@ -244,11 +244,11 @@ const Profile = () => {
       <main className="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Profile</h1>
-          <p className="text-gray-600 dark:text-white mt-2">
+          <p className="text-gray-600 dark:text-gray-300 mt-2">
             Manage your account settings and review analytics from your uploaded reports.
           </p>
 
-          <div className="mt-6 space-y-2 text-sm text-gray-700 dark:text-white">
+          <div className="mt-6 space-y-2 text-sm text-gray-700 dark:text-gray-200">
             <p><strong>Name:</strong> {user?.name}</p>
             <p><strong>Email:</strong> {user?.email}</p>
             <p><strong>Role:</strong> {user?.role}</p>
@@ -273,19 +273,19 @@ const Profile = () => {
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Report Analytics</h2>
-              <p className="text-gray-600 mt-1 dark:text-white">
+              <p className="text-gray-600 mt-1 dark:text-gray-300">
                 A summary of your previously uploaded reports.
               </p>
             </div>
             <div className="w-full sm:w-56">
-              <label htmlFor="analytics-scope" className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
+              <label htmlFor="analytics-scope" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                 Time Range
               </label>
               <select
                 id="analytics-scope"
                 value={selectedScope}
                 onChange={(event) => setSelectedScope(event.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900"
               >
                 <option value="week">Week</option>
                 <option value="month">Month</option>
@@ -295,7 +295,7 @@ const Profile = () => {
           </div>
 
           {analyticsLoading ? (
-            <div className="py-10 flex items-center justify-center text-gray-500 ">
+            <div className="py-10 flex items-center justify-center text-gray-500 dark:text-gray-400">
               <Loader2 className="w-6 h-6 animate-spin mr-3 text-indigo-600" />
               Loading analytics...
             </div>
@@ -305,10 +305,10 @@ const Profile = () => {
               {analyticsError}
             </div>
           ) : analytics?.summary?.totalReports === 0 ? (
-            <div className="mt-6 border border-dashed border-gray-300 rounded-xl p-8 text-center">
-              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900">No analytics yet</h3>
-              <p className="text-gray-600 mt-2">
+            <div className="mt-6 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-8 text-center">
+              <FileText className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No analytics yet</h3>
+              <p className="text-gray-600 dark:text-gray-300 mt-2">
                 Upload your first report to start building analytics on this page.
               </p>
               <Link
@@ -325,39 +325,39 @@ const Profile = () => {
                   const Icon = card.icon;
 
                   return (
-                    <div key={card.label} className="rounded-xl bg-gray-50 p-4 border border-gray-100">
+                    <div key={card.label} className="rounded-xl bg-gray-50 dark:bg-gray-800 p-4 border border-gray-100 dark:border-gray-700">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-500">{card.label}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{card.label}</p>
                         <Icon className="w-5 h-5 text-indigo-600" />
                       </div>
-                      <p className="text-2xl font-bold text-gray-900 mt-3">{card.value}</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-white mt-3">{card.value}</p>
                     </div>
                   );
                 })}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <p className="text-sm text-gray-500">Failed Reports</p>
-                  <p className="text-2xl font-semibold text-gray-900 mt-2">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Failed Reports</p>
+                  <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
                     {analytics.summary?.failedReports ?? 0}
                   </p>
                 </div>
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <p className="text-sm text-gray-500">Passed Reviews</p>
-                  <p className="text-2xl font-semibold text-gray-900 mt-2">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Passed Reviews</p>
+                  <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
                     {analytics.qualityBreakdown?.good ?? 0}
                   </p>
                 </div>
               </div>
 
               <div className="mt-8">
-                <h3 className="text-lg font-semibold text-gray-900">Average Errors Per Report</h3>
-                <p className="text-sm text-gray-500 dark:text-white t-1">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Average Errors Per Report</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 t-1">
                   The average number of each error type found per analysed report.
                 </p>
 
-                <div className="rounded-xl border border-gray-200 p-5 mt-4">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-5 mt-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
                     {averageErrorTypeBreakdown.map((item) => (
                       <div
@@ -365,21 +365,21 @@ const Profile = () => {
                         className={`rounded-xl px-4 py-4 text-center border border-transparent ${item.cardClass}`}
                       >
                         <p className={`text-2xl font-bold ${item.valueClass}`}>{item.average}</p>
-                        <p className="text-sm text-gray-700 mt-1">{item.label}</p>
+                        <p className="text-sm text-gray-700 dark:text-gray-800 mt-1">{item.label}</p>
                       </div>
                     ))}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                    <div className="rounded-xl bg-white border border-gray-200 p-4">
-                      <p className="text-sm text-gray-500">Analysed Reports</p>
-                      <p className="text-2xl font-semibold text-gray-900 mt-2">
+                    <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Analysed Reports</p>
+                      <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
                         {analytics.summary?.analyzedReports ?? 0}
                       </p>
                     </div>
-                    <div className="rounded-xl bg-white border border-gray-200 p-4">
-                      <p className="text-sm text-gray-500">Overall Average Errors</p>
-                      <p className="text-2xl font-semibold text-gray-900 mt-2">
+                    <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Overall Average Errors</p>
+                      <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
                         {analytics.summary?.averageErrorsPerReport ?? 0}
                       </p>
                     </div>
@@ -388,15 +388,15 @@ const Profile = () => {
               </div>
 
               <div className="mt-8">
-                <h3 className="text-lg font-semibold text-gray-900">Pass Rate Over Time</h3>
-                <p className="text-sm text-gray-500 dark:text-white mt-1">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Pass Rate Over Time</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Monthly pass percentage based on analysed reports marked as passed.
                 </p>
-                <p className="mt-2 text-sm text-gray-600">
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                   This chart is built from your uploaded reports in the selected time range, grouped by date and matched against each analysed report&apos;s stored quality assessment, and it is used to show whether the share of reports passing automated review is improving, declining, or staying consistent over time.
                 </p>
 
-                <div className="rounded-xl border border-gray-200 p-5 mt-4">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-5 mt-4">
                   <ResponsiveContainer width="100%" height={260}>
                     <LineChart data={passRateChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -431,15 +431,15 @@ const Profile = () => {
               </div>
 
               <div className="mt-8">
-                <h3 className="text-lg font-semibold text-gray-900">Quality Score Trend</h3>
-                <p className="text-sm text-gray-500  dark:text-white mt-1">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Quality Score Trend</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Per-report quality score over time based on the stored quality assessment.
                 </p>
-                <p className="mt-2 text-sm text-gray-600">
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                   This trend uses the stored quality score from each analysed report&apos;s quality assessment, converts it into a percentage, and orders the latest reports by upload date so you can see how individual report quality changes and spot drops or improvement more easily.
                 </p>
 
-                <div className="rounded-xl border border-gray-200 p-5 mt-4">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-5 mt-4">
                   {analytics.qualityScoreTrend?.length ? (
                     <ResponsiveContainer width="100%" height={280}>
                       <LineChart data={qualityScoreChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
@@ -466,21 +466,21 @@ const Profile = () => {
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
-                    <p className="text-sm text-gray-500">No analysed reports with quality scores yet.</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No analysed reports with quality scores yet.</p>
                   )}
                 </div>
               </div>
 
               <div className="mt-8">
-                <h3 className="text-lg font-semibold text-gray-900">Most Common Error Types</h3>
-                <p className="text-sm text-gray-500 dark:text-white mt-1">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Most Common Error Types</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Ranked by frequency so you can see the patterns affecting your reports most often.
                 </p>
-                <p className="mt-2 text-sm text-gray-600">
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                   This breakdown comes from the stored error summaries on your analysed reports, where detected issues are grouped into categories such as placeholder, consistency, compliance, formatting, and missing data, and it is used to highlight which types of problems appear most often across your work.
                 </p>
 
-                <div className="rounded-xl border border-gray-200 p-5 mt-4">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-5 mt-4">
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={commonErrorTypeChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -500,15 +500,15 @@ const Profile = () => {
               </div>
 
               <div className="mt-8">
-                <h3 className="text-lg font-semibold text-gray-900">Top Recurring Checklist Failures</h3>
-                <p className="text-sm text-gray-500 dark:text-white mt-1">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Top Recurring Checklist Failures</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   The most frequently repeated issue messages across all analysed reports.
                 </p>
-                <p className="mt-2 text-sm text-gray-600">
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                   This chart is generated from the individual error messages stored on each analysed report rather than just the broad error categories, and it is used to show the exact checklist failures that recur most often so you can target the specific causes behind repeated issues.
                 </p>
 
-                <div className="rounded-xl border border-gray-200 p-5 mt-4">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-5 mt-4">
                   {analytics.checklistFailureBreakdown?.length ? (
                     <ResponsiveContainer width="100%" height={320}>
                       <BarChart
@@ -527,7 +527,7 @@ const Profile = () => {
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
-                    <p className="text-sm text-gray-500">No recurring checklist failures found yet.</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No recurring checklist failures found yet.</p>
                   )}
                 </div>
               </div>
@@ -535,8 +535,8 @@ const Profile = () => {
               <div className="mt-8">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Recent Reports</h3>
-                    <p className="text-sm text-gray-500 dark:text-white">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Reports</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       Your most recently uploaded reports.
                     </p>
                   </div>
@@ -549,47 +549,47 @@ const Profile = () => {
                 </div>
 
                 {analytics.recentReports?.length ? (
-                  <div className="overflow-x-auto border border-gray-200 rounded-xl">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                  <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-xl">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-50 dark:bg-gray-800">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                             Report
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                             Status
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                             Errors
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                             Result
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                             Date
                           </th>
-                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                             Action
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
+                      <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                         {analytics.recentReports.map((report) => {
                           const isExpanded = expandedReports[report._id] ?? false;
 
                           return (
                             <Fragment key={report._id}>
-                              <tr className="hover:bg-gray-50">
-                                <td className="px-4 py-4 text-sm font-medium text-gray-900">
+                              <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/70">
+                                <td className="px-4 py-4 text-sm font-medium text-gray-900 dark:text-white">
                                   <button
                                     type="button"
                                     onClick={() => toggleReport(report._id)}
-                                    className="inline-flex items-center text-left hover:text-indigo-700"
+                                    className="inline-flex items-center text-left hover:text-indigo-700 dark:hover:text-indigo-400"
                                   >
                                     {isExpanded ? (
-                                      <ChevronDown className="w-4 h-4 mr-2 text-gray-500" />
+                                      <ChevronDown className="w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" />
                                     ) : (
-                                      <ChevronRight className="w-4 h-4 mr-2 text-gray-500" />
+                                      <ChevronRight className="w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" />
                                     )}
                                     <span>{report.filename}</span>
                                   </button>
@@ -607,13 +607,13 @@ const Profile = () => {
                                       {report.errorCount} {report.errorCount === 1 ? 'error' : 'errors'}
                                     </span>
                                   ) : (
-                                    <span className="text-gray-400">-</span>
+                                    <span className="text-gray-400 dark:text-gray-500">-</span>
                                   )}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap">
                                   {getQualityBadge(report)}
                                 </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                   {formatDate(report.createdAt)}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -626,10 +626,10 @@ const Profile = () => {
                                 </td>
                               </tr>
                               {isExpanded && (
-                                <tr className="bg-gray-50">
+                                <tr className="bg-gray-50 dark:bg-gray-800/60">
                                   <td colSpan="6" className="px-4 py-5">
-                                    <div className="rounded-xl bg-white border border-gray-200 p-4">
-                                      <h4 className="text-lg font-semibold text-gray-900">
+                                    <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-4">
+                                      <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
                                         Error Summary
                                       </h4>
                                       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 mt-4">
@@ -641,7 +641,7 @@ const Profile = () => {
                                             <p className={`text-2xl font-bold ${card.valueClass}`}>
                                               {report.errorSummary?.[card.key] ?? 0}
                                             </p>
-                                            <p className="text-sm text-gray-700 mt-1">{card.label}</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-800 mt-1">{card.label}</p>
                                           </div>
                                         ))}
                                       </div>
@@ -656,7 +656,7 @@ const Profile = () => {
                     </table>
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-gray-500">
+                  <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-6 text-center text-gray-500 dark:text-gray-400">
                     No recent reports to display.
                   </div>
                 )}

@@ -2,8 +2,9 @@ const placeholderDetector = require('./placeholderDetector');
 const formattingChecker = require('./formattingChecker');
 const missingDataChecker = require('./missingDataChecker');
 const checklistChecker = require('./checklistChecker');
+const templateChecker = require('./templateChecker');
 const mlEnhancedDetector = require('./mlEnhancedDetector');
-const { applyContextAwareErrorRescoring } = require('../trainingService');
+const { applyContextAwareErrorRescoring, getActiveTemplate } = require('../trainingService');
 
 const analyzeDocument = async (text, sections = [], options = {}) => {
   const errors = [];
@@ -19,6 +20,16 @@ const analyzeDocument = async (text, sections = [], options = {}) => {
 
   const checklistErrors = checklistChecker.detect(text, sections);
   errors.push(...checklistErrors);
+
+  try {
+    const activeTemplate = await getActiveTemplate();
+    if (activeTemplate?.metadata) {
+      const templateErrors = templateChecker.detect(text, activeTemplate.metadata);
+      errors.push(...templateErrors);
+    }
+  } catch (err) {
+    console.warn('Template compliance check skipped:', err.message);
+  }
 
   try {
     const mlErrors = await mlEnhancedDetector.analyzeWithML(text, sections);
