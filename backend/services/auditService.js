@@ -1,11 +1,16 @@
 const AuditLog = require('../models/AuditLog');
 
 /**
- * Extract the real client IP from a request, handling proxies.
+ * Extract the real client IP from a request.
+ * With `app.set('trust proxy', 1)` in server.js, Express populates req.ip
+ * correctly from x-forwarded-for when behind a proxy/load balancer.
+ * Falls back through other sources for direct connections.
  */
 const getIp = (req) => {
   return (
+    req.ip ||
     req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+    req.connection?.remoteAddress ||
     req.socket?.remoteAddress ||
     null
   );
