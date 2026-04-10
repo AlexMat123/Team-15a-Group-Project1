@@ -1,0 +1,45 @@
+const mongoose = require('mongoose');
+
+const auditLogSchema = new mongoose.Schema(
+  {
+    action: {
+      type: String,
+      required: true,
+      enum: [
+        'login_success',
+        'login_failed',
+        'login_inactive',
+      ],
+      index: true,
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    email: {
+      type: String,
+      default: null,
+    },
+    ip: {
+      type: String,
+      default: null,
+    },
+    userAgent: {
+      type: String,
+      default: null,
+    },
+    details: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// TTL index — automatically delete logs older than 90 days
+auditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 });
+
+module.exports = mongoose.model('AuditLog', auditLogSchema);

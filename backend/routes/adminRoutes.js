@@ -8,6 +8,7 @@ const Team = require('../models/Team');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const { trainingUpload, handleUploadError } = require('../middleware/uploadMiddleware');
 const TrainingExample = require('../models/TrainingExample');
+const AuditLog = require('../models/AuditLog');
 const { buildTrainingExamplesFromLabeledReports, processTrainingExample } = require('../services/trainingService');
 const { sendTeamAssignmentEmail, sendTeamLeadAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
 
@@ -1192,6 +1193,44 @@ router.get('/users/:id/profile-analytics', protect, authorize('admin'), async (r
       checklistFailureBreakdown,
       qualityScoreTrend,
       recentReports,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/audit-logs?action=login_failed&page=1&limit=50
+router.get('/audit-logs', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { action, page = 1, limit = 50 } = req.query;
+    const filter = {};
+    if (action) filter.action = action;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [logs, total] = await Promise.all([
+      AuditLog.find(filter)
+        .populate('userId', 'name email role')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      AuditLog.countDocuments(filter),
+    ]);
+
+    // Summary counts for the last 24h
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [successCount, failedCount, inactiveCount] = await Promise.all([
+      AuditLog.countDocuments({ action: 'login_success', createdAt: { $gte: since24h } }),
+      AuditLog.countDocuments({ action: 'login_failed', createdAt: { $gte: since24h } }),
+      AuditLog.countDocuments({ action: 'login_inactive', createdAt: { $gte: since24h } }),
+    ]);
+
+    res.json({
+      logs,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+      summary24h: { successCount, failedCount, inactiveCount },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
