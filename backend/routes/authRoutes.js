@@ -11,21 +11,22 @@ const {
   deleteAccount,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
+const { loginLimiter, authLimiter } = require('../middleware/rateLimitMiddleware');
 
-router.post('/login', login);
+router.post('/login', loginLimiter, login);
 
-router.get('/me', protect, getMe);
+router.get('/me', authLimiter, protect, getMe);
 
-router.put('/change-password', protect, changePassword);
+router.put('/change-password', authLimiter, protect, changePassword);
 
-router.put('/profile', protect, updateProfile);
+router.put('/profile', authLimiter, protect, updateProfile);
 
-router.get('/preferences', protect, getPreferences);
+router.get('/preferences', authLimiter, protect, getPreferences);
 
-router.put('/preferences', protect, updatePreferences);
+router.put('/preferences', authLimiter, protect, updatePreferences);
 
-router.get('/export', protect, exportUserData);
+router.get('/export', authLimiter, protect, exportUserData);
 
-router.delete('/account', protect, deleteAccount);
+router.delete('/account', authLimiter, protect, deleteAccount);
 
 module.exports = router;
