@@ -45,19 +45,33 @@ const getAnalyticsScopeConfig = (range) => {
   };
 };
 
-const buildAnalyticsPayload = async ({ filter, scopeLabel, scopeDetails, range }) => {
+const buildAnalyticsPayload = async ({ filter, scopeLabel, scopeDetails, range, postFetchFilter }) => {
   const scopeConfig = getAnalyticsScopeConfig(range);
   const reportFilter = { ...filter };
 
   if (scopeConfig.startDate) {
-    reportFilter.createdAt = { $gte: scopeConfig.startDate };
+    const existingStartDate = reportFilter.createdAt?.$gte
+      ? new Date(reportFilter.createdAt.$gte)
+      : null;
+    const effectiveStartDate = existingStartDate && existingStartDate > scopeConfig.startDate
+      ? existingStartDate
+      : scopeConfig.startDate;
+
+    reportFilter.createdAt = {
+      ...(reportFilter.createdAt || {}),
+      $gte: effectiveStartDate,
+    };
   }
 
-  const reports = await Report.find(reportFilter)
+  let reports = await Report.find(reportFilter)
     .select('filename status errorCount errorSummary timeSaved qualityAssessment createdAt analyzedBy errors')
     .populate('analyzedBy', 'name email')
     .sort({ createdAt: -1 })
     .lean();
+
+  if (typeof postFetchFilter === 'function') {
+    reports = reports.filter(postFetchFilter);
+  }
 
   const summary = {
     totalReports: reports.length,

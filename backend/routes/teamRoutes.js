@@ -4,6 +4,7 @@ const Team = require('../models/Team');
 const User = require('../models/User');
 const Report = require('../models/Report');
 const { protect, authorize } = require('../middleware/authMiddleware');
+const { buildAnalyticsPayload } = require('../services/analyticsService');
 const { sendTeamAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
 
 // GET /api/teams/my-team — get the logged-in user's team with members
@@ -133,46 +134,134 @@ router.delete('/my-team/members/:userId', protect, authorize('team_leader'), asy
 // GET /api/teams/my-team/stats — team lead gets team-specific stats
 router.get('/my-team/stats', protect, authorize('team_leader'), async (req, res) => {
   try {
+    const { range = '30' } = req.query;
     const team = await Team.findOne({ teamLead: req.user._id });
     if (!team) {
       return res.status(403).json({ message: 'You are not a team lead' });
     }
 
     const memberIds = team.members.map(m => m.toString());
-    const allMemberReports = await Report.find({ analyzedBy: { $in: memberIds } });
-
-    // Only include reports created after each member joined this team
-    const reports = allMemberReports.filter(r => {
-      const rUserId = r.analyzedBy.toString();
-      const joinDate = team.memberJoinDates?.get(rUserId);
-      if (!joinDate) return true;
-      return new Date(r.createdAt) >= new Date(joinDate);
+    const payload = await buildAnalyticsPayload({
+      filter: { analyzedBy: { $in: memberIds } },
+      scopeLabel: `Team: ${team.name}`,
+      scopeDetails: {
+        teamId: team._id,
+        teamName: team.name,
+        memberCount: memberIds.length,
+      },
+      range,
+      postFetchFilter: (report) => {
+        const analyzedById = report.analyzedBy?._id?.toString?.() || report.analyzedBy?.toString?.();
+        const joinDate = team.memberJoinDates?.get?.(analyzedById);
+        if (!joinDate) return true;
+        return new Date(report.createdAt) >= new Date(joinDate);
+      },
     });
 
-    const totalReports = reports.length;
-    const totalErrors = reports.reduce((sum, r) => sum + (r.errorCount || 0), 0);
-    const totalTimeSaved = reports.reduce((sum, r) => sum + (r.timeSaved || 0), 0);
-
-    const errorBreakdown = [
-      { name: 'Placeholder', value: reports.reduce((sum, r) => sum + (r.errorSummary?.placeholder || 0), 0) },
-      { name: 'Consistency', value: reports.reduce((sum, r) => sum + (r.errorSummary?.consistency || 0), 0) },
-      { name: 'Compliance', value: reports.reduce((sum, r) => sum + (r.errorSummary?.compliance || 0), 0) },
-      { name: 'Formatting', value: reports.reduce((sum, r) => sum + (r.errorSummary?.formatting || 0), 0) },
-      { name: 'Missing Data', value: reports.reduce((sum, r) => sum + (r.errorSummary?.missing_data || 0), 0) },
-    ];
-
-    const manualTime = parseFloat((totalTimeSaved / 0.16).toFixed(1));
-    const timeSavedPercent = manualTime > 0 ? Math.round((totalTimeSaved / manualTime) * 100) : 0;
-
     res.json({
+      range,
       totalMembers: memberIds.length,
-      totalReports,
-      totalErrors,
-      timeSaved: Math.round(totalTimeSaved),
-      manualTime,
-      aiTime: Math.round(manualTime - totalTimeSaved),
-      timeSavedPercent,
-      errorBreakdown,
+      totalReports: payload.summary.totalReports,
+      totalErrors: payload.summary.totalErrors,
+      timeSaved: Math.round(payload.summary.totalTimeSaved),
+      manualTime: payload.summary.manualTime,
+      aiTime: payload.summary.aiTime,
+      timeSavedPercent: payload.summary.timeSavedPercent,
+      errorBreakdown: payload.errorBreakdown,
+      qualityBreakdown: {
+        passed: payload.qualityBreakdown.good,
+        failed: payload.qualityBreakdown.bad,
+        uncertain: payload.qualityBreakdown.uncertain,
+        pending: payload.summary.pendingReports,
+      },
+      summary: payload.summary,
+      scopeLabel: payload.scopeLabel,
+      scopeDetails: payload.scopeDetails,
+      trendData: payload.trendData,
+      passFailRateTrends: payload.passFailRateTrends,
+      qualityScoreTrend: payload.qualityScoreTrend,
+      mostCommonErrorTypes: payload.mostCommonErrorTypes,
+      checklistFailureBreakdown: payload.checklistFailureBreakdown,
+      topErrors: payload.topErrors,
+      recentReports: payload.recentReports.map((report) => ({
+        ...report,
+        result: report.qualityLabel,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/teams/my-team/comparison?primaryUserId=xxx&secondaryUserId=xxx&range=7|30|90|all
+router.get('/my-team/comparison', protect, authorize('team_leader'), async (req, res) => {
+  try {
+    const { primaryUserId, secondaryUserId, range = '30' } = req.query;
+
+    if (!primaryUserId || !secondaryUserId) {
+      return res.status(400).json({ message: 'Two users are required for comparison' });
+    }
+
+    if (primaryUserId === secondaryUserId) {
+      return res.status(400).json({ message: 'Comparison requires two different users' });
+    }
+
+    const team = await Team.findOne({ teamLead: req.user._id })
+      .populate('members', 'name email role')
+      .lean();
+
+    if (!team) {
+      return res.status(403).json({ message: 'You are not a team lead' });
+    }
+
+    const teamMemberIds = new Set(team.members.map((member) => member._id.toString()));
+    if (!teamMemberIds.has(primaryUserId) || !teamMemberIds.has(secondaryUserId)) {
+      return res.status(403).json({ message: 'You can only compare members of your own team' });
+    }
+
+    const selectedMembers = team.members.filter((member) =>
+      member._id.toString() === primaryUserId || member._id.toString() === secondaryUserId
+    );
+
+    const memberById = new Map(
+      selectedMembers.map((member) => [member._id.toString(), member])
+    );
+
+    const buildMemberScope = async (memberId) => {
+      const member = memberById.get(memberId);
+      const joinDate = team.memberJoinDates?.[memberId] || team.memberJoinDates?.get?.(memberId) || null;
+
+      return buildAnalyticsPayload({
+        filter: {
+          analyzedBy: memberId,
+          ...(joinDate ? { createdAt: { $gte: joinDate } } : {}),
+        },
+        scopeLabel: `User: ${member.name}`,
+        scopeDetails: {
+          userId: member._id,
+          userName: member.name,
+          userEmail: member.email,
+          userRole: member.role,
+          teamId: team._id,
+          teamName: team.name,
+        },
+        range,
+      });
+    };
+
+    const [primaryScope, secondaryScope] = await Promise.all([
+      buildMemberScope(primaryUserId),
+      buildMemberScope(secondaryUserId),
+    ]);
+
+    return res.json({
+      range,
+      comparisonMode: true,
+      comparisonType: 'user',
+      teamId: team._id,
+      teamName: team.name,
+      primaryScope,
+      secondaryScope,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
