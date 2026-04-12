@@ -9,6 +9,8 @@ const auditLogSchema = new mongoose.Schema(
         'login_success',
         'login_failed',
         'login_inactive',
+        'account_locked',
+        'login_blocked_lockout',
       ],
       index: true,
     },

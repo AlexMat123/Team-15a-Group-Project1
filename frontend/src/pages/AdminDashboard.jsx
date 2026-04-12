@@ -3876,6 +3876,8 @@ const AdminDashboard = () => {
                     <option value="login_success">Successful logins</option>
                     <option value="login_failed">Failed logins</option>
                     <option value="login_inactive">Inactive account blocks</option>
+                    <option value="account_locked">Account lockouts</option>
+                    <option value="login_blocked_lockout">Blocked — locked account</option>
                   </select>
                   <button
                     onClick={() => fetchAuditLogs(auditFilter, auditPage)}
@@ -3924,6 +3926,16 @@ const AdminDashboard = () => {
                                   <AlertTriangle className="w-3 h-3" /> Inactive account
                                 </span>
                               )}
+                              {log.action === 'account_locked' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-200 text-red-800">
+                                  <KeyRound className="w-3 h-3" /> Account locked
+                                </span>
+                              )}
+                              {log.action === 'login_blocked_lockout' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                                  <KeyRound className="w-3 h-3" /> Blocked — locked
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3">
                               {log.userId?.name ? (
@@ -3940,6 +3952,17 @@ const AdminDashboard = () => {
                             </td>
                             <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">
                               {log.details?.reason || log.details?.role || '—'}
+                              {log.details?.failedAttempts > 0 && (
+                                <span className="ml-1 text-red-500">({log.details.failedAttempts}/5 attempts)</span>
+                              )}
+                              {log.details?.lockedUntil && (
+                                <span className="ml-1 text-red-600 font-medium">
+                                  — until {new Date(log.details.lockedUntil).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                              {log.details?.minutesLeft && (
+                                <span className="ml-1 text-orange-600">({log.details.minutesLeft}m remaining)</span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">
                               {new Date(log.createdAt).toLocaleString('en-GB', {
