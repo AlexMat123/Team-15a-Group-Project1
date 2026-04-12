@@ -3878,6 +3878,9 @@ const AdminDashboard = () => {
                     <option value="login_inactive">Inactive account blocks</option>
                     <option value="account_locked">Account lockouts</option>
                     <option value="login_blocked_lockout">Blocked — locked account</option>
+                    <option value="report_deleted">Report deletions</option>
+                    <option value="training_upload">Training uploads</option>
+                    <option value="training_deleted">Training deletions</option>
                   </select>
                   <button
                     onClick={() => fetchAuditLogs(auditFilter, auditPage)}
@@ -3936,6 +3939,21 @@ const AdminDashboard = () => {
                                   <KeyRound className="w-3 h-3" /> Blocked — locked
                                 </span>
                               )}
+                              {log.action === 'report_deleted' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                  <Trash2 className="w-3 h-3" /> Report deleted
+                                </span>
+                              )}
+                              {log.action === 'training_upload' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
+                                  <FileText className="w-3 h-3" /> Training upload
+                                </span>
+                              )}
+                              {log.action === 'training_deleted' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
+                                  <Trash2 className="w-3 h-3" /> Training deleted
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3">
                               {log.userId?.name ? (
@@ -3951,7 +3969,21 @@ const AdminDashboard = () => {
                               {log.ip || '—'}
                             </td>
                             <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">
-                              {log.details?.reason || log.details?.role || '—'}
+                              {log.details?.filename && (
+                                <span className="font-medium text-gray-700 dark:text-gray-300">{log.details.filename}</span>
+                              )}
+                              {log.details?.type && (
+                                <span className="ml-1 text-indigo-500">({log.details.type})</span>
+                              )}
+                              {log.details?.reason && !log.details?.filename && (
+                                <span>{log.details.reason}</span>
+                              )}
+                              {log.details?.role && !log.details?.filename && (
+                                <span>{log.details.role}</span>
+                              )}
+                              {log.details?.deletedBy && (
+                                <span className="ml-1 text-gray-400">by {log.details.deletedBy}</span>
+                              )}
                               {log.details?.failedAttempts > 0 && (
                                 <span className="ml-1 text-red-500">({log.details.failedAttempts}/5 attempts)</span>
                               )}
@@ -3963,6 +3995,7 @@ const AdminDashboard = () => {
                               {log.details?.minutesLeft && (
                                 <span className="ml-1 text-orange-600">({log.details.minutesLeft}m remaining)</span>
                               )}
+                              {!log.details?.filename && !log.details?.reason && !log.details?.role && '—'}
                             </td>
                             <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">
                               {new Date(log.createdAt).toLocaleString('en-GB', {

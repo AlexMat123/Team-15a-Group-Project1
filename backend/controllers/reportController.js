@@ -5,6 +5,7 @@ const { processDocument } = require('../services/pdfService');
 const { analyzeDocument } = require('../services/errorDetection');
 const { predictQualityFromTraining } = require('../services/trainingService');
 const { generateReportPdf } = require('../services/reportPdfService');
+const audit = require('../services/auditService');
 const fs = require('fs');
 const path = require('path');
 
@@ -266,6 +267,17 @@ const deleteReport = async (req, res) => {
     }
 
     await Report.findByIdAndDelete(req.params.id);
+
+    await audit.log('report_deleted', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        reportId: report._id,
+        filename: report.filename,
+        deletedBy: req.user.role,
+      },
+    });
 
     res.json({ message: 'Report deleted successfully' });
   } catch (error) {

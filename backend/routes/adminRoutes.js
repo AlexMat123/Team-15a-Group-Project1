@@ -11,6 +11,7 @@ const TrainingExample = require('../models/TrainingExample');
 const AuditLog = require('../models/AuditLog');
 const { buildTrainingExamplesFromLabeledReports, processTrainingExample } = require('../services/trainingService');
 const { sendTeamAssignmentEmail, sendTeamLeadAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
+const audit = require('../services/auditService');
 
 
 // GET /api/admin/stats?range=7d|30d|90d|all&team=teamId&user=userId&result=good|bad|uncertain
@@ -669,6 +670,18 @@ router.post(
         console.error('Background training processing failed:', err.message);
       });
 
+      await audit.log('training_upload', {
+        req,
+        userId: req.user._id,
+        email: req.user.email,
+        details: {
+          exampleId: trainingExample._id,
+          filename: trainingExample.filename,
+          type,
+          fileSize: req.file.size,
+        },
+      });
+
       res.status(201).json({
         message: 'Training example uploaded successfully',
         example: trainingExample,
@@ -710,6 +723,17 @@ router.delete('/training/examples/:id', protect, authorize('admin'), async (req,
     }
 
     await example.deleteOne();
+
+    await audit.log('training_deleted', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        exampleId: example._id,
+        filename: example.filename,
+        type: example.type,
+      },
+    });
 
     res.json({ message: 'Training example deleted successfully' });
   } catch (err) {
