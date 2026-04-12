@@ -133,6 +133,16 @@ const TeamPage = () => {
     fetchAnnouncements();
   }, [user?.role]);
 
+  useEffect(() => {
+    if (!showStats) return;
+
+    fetchTeamStats(analyticsRange);
+
+    if (comparisonData && comparisonPrimaryUserId && comparisonSecondaryUserId) {
+      handleFetchComparison();
+    }
+  }, [showStats, analyticsRange]);
+
   const handleOpenAddModal = async () => {
     setAddSearch('');
     setShowAddModal(true);
@@ -187,9 +197,6 @@ const TeamPage = () => {
   };
 
   const handleFetchComparison = async () => {
-    setComparisonError('');
-    setComparisonData(null);
-
     if (!comparisonPrimaryUserId || !comparisonSecondaryUserId) {
       setComparisonError('Select two team members to compare.');
       return;
@@ -544,16 +551,13 @@ const TeamPage = () => {
                       + Add Members
                     </button>
                     <button
-                      onClick={async () => {
+                      onClick={() => {
                         setComparisonError('');
                         setComparisonData(null);
                         setComparisonPrimaryUserId('');
                         setComparisonSecondaryUserId('');
                         setAnalyticsRange('30');
-                        const loaded = await fetchTeamStats('30');
-                        if (loaded || teamStats) {
-                          setShowStats(true);
-                        }
+                        setShowStats(true);
                       }}
                       className="text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
                     >
@@ -1207,6 +1211,8 @@ const TeamPage = () => {
                     <p className="mb-4 text-sm text-red-600">{teamStatsError}</p>
                   )}
 
+                  {!comparisonData && (
+                    <>
                   {/* Stat cards */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <div className="border border-gray-200 rounded-xl p-4">
@@ -1455,6 +1461,8 @@ const TeamPage = () => {
                         </table>
                       </div>
                     </div>
+                  )}
+                    </>
                   )}
 
                   <button
