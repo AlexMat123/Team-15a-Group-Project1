@@ -3881,6 +3881,11 @@ const AdminDashboard = () => {
                     <option value="report_deleted">Report deletions</option>
                     <option value="training_upload">Training uploads</option>
                     <option value="training_deleted">Training deletions</option>
+                    <option value="team_created">Team created</option>
+                    <option value="team_deleted">Team deleted</option>
+                    <option value="team_member_added">Member added</option>
+                    <option value="team_member_removed">Member removed</option>
+                    <option value="team_lead_assigned">Team lead assigned</option>
                   </select>
                   <button
                     onClick={() => fetchAuditLogs(auditFilter, auditPage)}
@@ -3954,6 +3959,31 @@ const AdminDashboard = () => {
                                   <Trash2 className="w-3 h-3" /> Training deleted
                                 </span>
                               )}
+                              {log.action === 'team_created' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                                  <Users className="w-3 h-3" /> Team created
+                                </span>
+                              )}
+                              {log.action === 'team_deleted' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                  <Users className="w-3 h-3" /> Team deleted
+                                </span>
+                              )}
+                              {log.action === 'team_member_added' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                  <Users className="w-3 h-3" /> Member added
+                                </span>
+                              )}
+                              {log.action === 'team_member_removed' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                  <Users className="w-3 h-3" /> Member removed
+                                </span>
+                              )}
+                              {log.action === 'team_lead_assigned' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
+                                  <Users className="w-3 h-3" /> Lead assigned
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3">
                               {log.userId?.name ? (
@@ -3983,6 +4013,21 @@ const AdminDashboard = () => {
                               )}
                               {log.details?.deletedBy && (
                                 <span className="ml-1 text-gray-400">by {log.details.deletedBy}</span>
+                              )}
+                              {log.details?.teamName && !log.details?.filename && (
+                                <span className="font-medium text-gray-700 dark:text-gray-300">{log.details.teamName}</span>
+                              )}
+                              {log.details?.newLeadName && (
+                                <span className="ml-1 text-indigo-600">→ {log.details.newLeadName}</span>
+                              )}
+                              {log.details?.removedUserEmail && (
+                                <span className="ml-1 text-gray-500">{log.details.removedUserEmail}</span>
+                              )}
+                              {log.details?.count > 0 && (
+                                <span className="ml-1 text-gray-400">({log.details.count} member{log.details.count !== 1 ? 's' : ''})</span>
+                              )}
+                              {log.details?.memberCount !== undefined && log.action === 'team_deleted' && (
+                                <span className="ml-1 text-gray-400">({log.details.memberCount} member{log.details.memberCount !== 1 ? 's' : ''})</span>
                               )}
                               {log.details?.failedAttempts > 0 && (
                                 <span className="ml-1 text-red-500">({log.details.failedAttempts}/5 attempts)</span>

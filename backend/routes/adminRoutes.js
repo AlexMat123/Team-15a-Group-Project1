@@ -818,6 +818,13 @@ router.post('/teams', protect, authorize('admin'), async (req, res) => {
       createdBy: req.user._id,
     });
 
+    await audit.log('team_created', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: { teamId: team._id, teamName: team.name },
+    });
+
     res.status(201).json(team);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -871,6 +878,21 @@ router.patch('/teams/:id/members', protect, authorize('admin'), async (req, res)
       .populate('teamLead', 'name email')
       .lean();
 
+    if (newIds.length > 0) {
+      const addedUsers = await User.find({ _id: { $in: newIds } }).select('name email').lean();
+      await audit.log('team_member_added', {
+        req,
+        userId: req.user._id,
+        email: req.user.email,
+        details: {
+          teamId: team._id,
+          teamName: team.name,
+          addedMembers: addedUsers.map(u => ({ id: u._id, name: u.name, email: u.email })),
+          count: newIds.length,
+        },
+      });
+    }
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -911,6 +933,18 @@ router.delete('/teams/:id/members/:userId', protect, authorize('admin'), async (
       .populate('members', 'name email role')
       .populate('teamLead', 'name email')
       .lean();
+
+    await audit.log('team_member_removed', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        teamId: team._id,
+        teamName: team.name,
+        removedUserId: req.params.userId,
+        removedUserEmail: removedUser?.email || null,
+      },
+    });
 
     res.json(updated);
   } catch (err) {
@@ -958,6 +992,20 @@ router.patch('/teams/:id/lead', protect, authorize('admin'), async (req, res) =>
       .populate('teamLead', 'name email')
       .lean();
 
+    const assignedUser = await User.findById(userId).select('name email').lean();
+    await audit.log('team_lead_assigned', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        teamId: team._id,
+        teamName: team.name,
+        newLeadId: userId,
+        newLeadName: assignedUser?.name || null,
+        newLeadEmail: assignedUser?.email || null,
+      },
+    });
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -974,6 +1022,17 @@ router.delete('/teams/:id', protect, authorize('admin'), async (req, res) => {
     if (team.teamLead) {
       await User.findByIdAndUpdate(team.teamLead, { role: 'user' });
     }
+
+    await audit.log('team_deleted', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        teamId: team._id,
+        teamName: team.name,
+        memberCount: team.members.length,
+      },
+    });
 
     await team.deleteOne();
 
