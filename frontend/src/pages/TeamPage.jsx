@@ -492,6 +492,10 @@ const TeamPage = () => {
     (max, item) => Math.max(max, item.primaryValue ?? 0, item.secondaryValue ?? 0),
     0
   );
+  const comparisonPrimaryHasNoReports = comparisonData && (comparisonPrimaryScope?.summary?.totalReports ?? 0) === 0;
+  const comparisonSecondaryHasNoReports = comparisonData && (comparisonSecondaryScope?.summary?.totalReports ?? 0) === 0;
+  const comparisonPrimaryHasNoAnalysed = comparisonData && (comparisonPrimaryScope?.summary?.analyzedReports ?? 0) === 0;
+  const comparisonSecondaryHasNoAnalysed = comparisonData && (comparisonSecondaryScope?.summary?.analyzedReports ?? 0) === 0;
 
   const getGoalProgress = (goal) => {
     if (!currentStats) return { current: 0, pct: 0, met: false };
@@ -1034,13 +1038,33 @@ const TeamPage = () => {
                       <p className="text-xs text-gray-500">
                         Comparison is restricted to members of {team.name}.
                       </p>
-                      <button
-                        onClick={handleFetchComparison}
-                        disabled={comparisonLoading}
-                        className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-                      >
-                        {comparisonLoading ? 'Loading...' : 'Compare Members'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {comparisonData && (
+                          <button
+                            onClick={() => {
+                              setComparisonData(null);
+                              setComparisonError('');
+                              setComparisonPrimaryUserId('');
+                              setComparisonSecondaryUserId('');
+                            }}
+                            className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                          >
+                            Clear Comparison
+                          </button>
+                        )}
+                        <button
+                          onClick={handleFetchComparison}
+                          disabled={
+                            comparisonLoading ||
+                            !comparisonPrimaryUserId ||
+                            !comparisonSecondaryUserId ||
+                            comparisonPrimaryUserId === comparisonSecondaryUserId
+                          }
+                          className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          {comparisonLoading ? 'Loading...' : 'Compare Members'}
+                        </button>
+                      </div>
                     </div>
 
                     {comparisonError && (
@@ -1049,6 +1073,25 @@ const TeamPage = () => {
 
                     {comparisonData && (
                       <>
+                        {(comparisonPrimaryHasNoReports || comparisonSecondaryHasNoReports || comparisonPrimaryHasNoAnalysed || comparisonSecondaryHasNoAnalysed) && (
+                          <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                            <div className="space-y-2 text-sm">
+                              {comparisonPrimaryHasNoReports && (
+                                <p className="text-indigo-700">{comparisonPrimaryScope?.scopeLabel} has no reports in this range.</p>
+                              )}
+                              {comparisonSecondaryHasNoReports && (
+                                <p className="text-green-700">{comparisonSecondaryScope?.scopeLabel} has no reports in this range.</p>
+                              )}
+                              {!comparisonPrimaryHasNoReports && comparisonPrimaryHasNoAnalysed && (
+                                <p className="text-indigo-700">{comparisonPrimaryScope?.scopeLabel} has reports in this range, but none have been analysed yet.</p>
+                              )}
+                              {!comparisonSecondaryHasNoReports && comparisonSecondaryHasNoAnalysed && (
+                                <p className="text-green-700">{comparisonSecondaryScope?.scopeLabel} has reports in this range, but none have been analysed yet.</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                           {[comparisonData.primaryScope, comparisonData.secondaryScope].map((scope) => (
                             <div key={scope.scopeDetails.userId} className="border border-indigo-100 rounded-xl p-4 bg-indigo-50/40">
