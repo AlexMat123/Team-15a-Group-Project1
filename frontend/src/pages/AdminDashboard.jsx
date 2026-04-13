@@ -15,10 +15,13 @@ import {
   Filter,
   KeyRound,
   Loader2,
+  LogIn,
   Search,
+  Shield,
   Trash2,
   Users,
   X,
+  XCircle,
 } from 'lucide-react';
 import {
   Bar,
@@ -48,6 +51,7 @@ const tabs = [
   { id: 'reports', label: 'Reports' },
   { id: 'training', label: 'AI Training' },
   { id: 'teams', label: 'Teams' },
+  { id: 'security', label: 'Security' },
 ];
 
 const COLORS = ['#6366f1', '#f59e0b', '#ef4444', '#10b981', '#3b82f6'];
@@ -182,6 +186,14 @@ const AdminDashboard = () => {
   const [deletingExampleId, setDeletingExampleId] = useState('');
   const [activatingTemplateId, setActivatingTemplateId] = useState('');
   const [dragActive, setDragActive] = useState(false);
+
+  // --- Security / Audit state ---
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditSummary, setAuditSummary] = useState({ successCount: 0, failedCount: 0, inactiveCount: 0 });
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditFilter, setAuditFilter] = useState('');
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditTotalPages, setAuditTotalPages] = useState(1);
 
   // --- Analytics state ---
   const [analyticsLevel, setAnalyticsLevel] = useState('company');
@@ -367,6 +379,22 @@ const AdminDashboard = () => {
     fetchTeamUserProfile();
   }, [teamFilterUser]);
 
+  const fetchAuditLogs = async (filter = auditFilter, page = auditPage) => {
+    setAuditLoading(true);
+    try {
+      const params = new URLSearchParams({ page, limit: 50 });
+      if (filter) params.append('action', filter);
+      const res = await api.get(`/admin/audit-logs?${params}`);
+      setAuditLogs(res.data.logs);
+      setAuditSummary(res.data.summary24h);
+      setAuditTotalPages(res.data.pages);
+    } catch (err) {
+      console.error('Failed to load audit logs', err);
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
   const fetchTrainingData = async () => {
     setLoadingTraining(true);
     try {
@@ -528,6 +556,12 @@ const AdminDashboard = () => {
     fetchTeams();
     fetchTrainingData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'security') {
+      fetchAuditLogs(auditFilter, auditPage);
+    }
+  }, [activeTab, auditFilter, auditPage]);
 
   useEffect(() => {
     if (activeTab === 'analytics') {
@@ -3820,6 +3854,232 @@ const AdminDashboard = () => {
               </div>
             )}
           </div>
+        )}
+
+        {/* ── SECURITY TAB ── */}
+        {activeTab === 'security' && (
+          <section className="space-y-6">
+            {/* Log table */}
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-indigo-600" />
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Audit Log</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={auditFilter}
+                    onChange={(e) => { setAuditFilter(e.target.value); setAuditPage(1); }}
+                    className="text-sm border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">All events</option>
+                    <option value="login_success">Successful logins</option>
+                    <option value="login_failed">Failed logins</option>
+                    <option value="login_inactive">Inactive account blocks</option>
+                    <option value="account_locked">Account lockouts</option>
+                    <option value="login_blocked_lockout">Blocked — locked account</option>
+                    <option value="report_deleted">Report deletions</option>
+                    <option value="training_upload">Training uploads</option>
+                    <option value="training_deleted">Training deletions</option>
+                    <option value="team_created">Team created</option>
+                    <option value="team_deleted">Team deleted</option>
+                    <option value="team_member_added">Member added</option>
+                    <option value="team_member_removed">Member removed</option>
+                    <option value="team_lead_assigned">Team lead assigned</option>
+                  </select>
+                  <button
+                    onClick={() => fetchAuditLogs(auditFilter, auditPage)}
+                    className="text-sm border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              {auditLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                </div>
+              ) : auditLogs.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-10">No log entries found.</p>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 dark:bg-gray-800 text-left text-gray-600 dark:text-gray-300">
+                          <th className="px-4 py-3 font-semibold">Event</th>
+                          <th className="px-4 py-3 font-semibold">User / Email</th>
+                          <th className="px-4 py-3 font-semibold">IP Address</th>
+                          <th className="px-4 py-3 font-semibold">Details</th>
+                          <th className="px-4 py-3 font-semibold">Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {auditLogs.map((log) => (
+                          <tr key={log._id} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                            <td className="px-4 py-3">
+                              {log.action === 'login_success' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                  <LogIn className="w-3 h-3" /> Login success
+                                </span>
+                              )}
+                              {log.action === 'login_failed' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                  <XCircle className="w-3 h-3" /> Login failed
+                                </span>
+                              )}
+                              {log.action === 'login_inactive' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                  <AlertTriangle className="w-3 h-3" /> Inactive account
+                                </span>
+                              )}
+                              {log.action === 'account_locked' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-200 text-red-800">
+                                  <KeyRound className="w-3 h-3" /> Account locked
+                                </span>
+                              )}
+                              {log.action === 'login_blocked_lockout' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                                  <KeyRound className="w-3 h-3" /> Blocked — locked
+                                </span>
+                              )}
+                              {log.action === 'report_deleted' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                  <Trash2 className="w-3 h-3" /> Report deleted
+                                </span>
+                              )}
+                              {log.action === 'training_upload' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
+                                  <FileText className="w-3 h-3" /> Training upload
+                                </span>
+                              )}
+                              {log.action === 'training_deleted' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
+                                  <Trash2 className="w-3 h-3" /> Training deleted
+                                </span>
+                              )}
+                              {log.action === 'team_created' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                                  <Users className="w-3 h-3" /> Team created
+                                </span>
+                              )}
+                              {log.action === 'team_deleted' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                  <Users className="w-3 h-3" /> Team deleted
+                                </span>
+                              )}
+                              {log.action === 'team_member_added' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                  <Users className="w-3 h-3" /> Member added
+                                </span>
+                              )}
+                              {log.action === 'team_member_removed' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                  <Users className="w-3 h-3" /> Member removed
+                                </span>
+                              )}
+                              {log.action === 'team_lead_assigned' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
+                                  <Users className="w-3 h-3" /> Lead assigned
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              {log.userId?.name ? (
+                                <div>
+                                  <p className="font-medium text-gray-900 dark:text-white">{log.userId.name}</p>
+                                  <p className="text-xs text-gray-500">{log.email}</p>
+                                </div>
+                              ) : (
+                                <span className="text-gray-500">{log.email || '—'}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-mono text-xs">
+                              {log.ip || '—'}
+                            </td>
+                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">
+                              {log.details?.filename && (
+                                <span className="font-medium text-gray-700 dark:text-gray-300">{log.details.filename}</span>
+                              )}
+                              {log.details?.type && (
+                                <span className="ml-1 text-indigo-500">({log.details.type})</span>
+                              )}
+                              {log.details?.reason && !log.details?.filename && (
+                                <span>{log.details.reason}</span>
+                              )}
+                              {log.details?.role && !log.details?.filename && (
+                                <span>{log.details.role}</span>
+                              )}
+                              {log.details?.deletedBy && (
+                                <span className="ml-1 text-gray-400">by {log.details.deletedBy}</span>
+                              )}
+                              {log.details?.teamName && !log.details?.filename && (
+                                <span className="font-medium text-gray-700 dark:text-gray-300">{log.details.teamName}</span>
+                              )}
+                              {log.details?.newLeadName && (
+                                <span className="ml-1 text-indigo-600">→ {log.details.newLeadName}</span>
+                              )}
+                              {log.details?.removedUserEmail && (
+                                <span className="ml-1 text-gray-500">{log.details.removedUserEmail}</span>
+                              )}
+                              {log.details?.count > 0 && (
+                                <span className="ml-1 text-gray-400">({log.details.count} member{log.details.count !== 1 ? 's' : ''})</span>
+                              )}
+                              {log.details?.memberCount !== undefined && log.action === 'team_deleted' && (
+                                <span className="ml-1 text-gray-400">({log.details.memberCount} member{log.details.memberCount !== 1 ? 's' : ''})</span>
+                              )}
+                              {log.details?.failedAttempts > 0 && (
+                                <span className="ml-1 text-red-500">({log.details.failedAttempts}/5 attempts)</span>
+                              )}
+                              {log.details?.lockedUntil && (
+                                <span className="ml-1 text-red-600 font-medium">
+                                  — until {new Date(log.details.lockedUntil).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                              {log.details?.minutesLeft && (
+                                <span className="ml-1 text-orange-600">({log.details.minutesLeft}m remaining)</span>
+                              )}
+                              {!log.details?.filename && !log.details?.reason && !log.details?.role && '—'}
+                            </td>
+                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">
+                              {new Date(log.createdAt).toLocaleString('en-GB', {
+                                day: '2-digit', month: 'short', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit',
+                              })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination */}
+                  {auditTotalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                      <p className="text-sm text-gray-500">Page {auditPage} of {auditTotalPages}</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setAuditPage((p) => Math.max(1, p - 1))}
+                          disabled={auditPage === 1}
+                          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => setAuditPage((p) => Math.min(auditTotalPages, p + 1))}
+                          disabled={auditPage === auditTotalPages}
+                          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
         )}
 
       </main>

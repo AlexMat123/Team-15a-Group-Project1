@@ -8,12 +8,14 @@ const Team = require('../models/Team');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const { trainingUpload, handleUploadError } = require('../middleware/uploadMiddleware');
 const TrainingExample = require('../models/TrainingExample');
+const AuditLog = require('../models/AuditLog');
 const {
   buildAnalyticsPayload,
   resolveAnalyticsScope,
 } = require('../services/analyticsService');
 const { buildTrainingExamplesFromLabeledReports, processTrainingExample } = require('../services/trainingService');
 const { sendTeamAssignmentEmail, sendTeamLeadAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
+const audit = require('../services/auditService');
 
 
 // GET /api/admin/stats?range=7d|30d|90d|all&team=teamId&user=userId&result=good|bad|uncertain
@@ -311,6 +313,18 @@ router.post(
         console.error('Background training processing failed:', err.message);
       });
 
+      await audit.log('training_upload', {
+        req,
+        userId: req.user._id,
+        email: req.user.email,
+        details: {
+          exampleId: trainingExample._id,
+          filename: trainingExample.filename,
+          type,
+          fileSize: req.file.size,
+        },
+      });
+
       res.status(201).json({
         message: 'Training example uploaded successfully',
         example: trainingExample,
@@ -352,6 +366,17 @@ router.delete('/training/examples/:id', protect, authorize('admin'), async (req,
     }
 
     await example.deleteOne();
+
+    await audit.log('training_deleted', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        exampleId: example._id,
+        filename: example.filename,
+        type: example.type,
+      },
+    });
 
     res.json({ message: 'Training example deleted successfully' });
   } catch (err) {
@@ -436,6 +461,13 @@ router.post('/teams', protect, authorize('admin'), async (req, res) => {
       createdBy: req.user._id,
     });
 
+    await audit.log('team_created', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: { teamId: team._id, teamName: team.name },
+    });
+
     res.status(201).json(team);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -489,6 +521,21 @@ router.patch('/teams/:id/members', protect, authorize('admin'), async (req, res)
       .populate('teamLead', 'name email')
       .lean();
 
+    if (newIds.length > 0) {
+      const addedUsers = await User.find({ _id: { $in: newIds } }).select('name email').lean();
+      await audit.log('team_member_added', {
+        req,
+        userId: req.user._id,
+        email: req.user.email,
+        details: {
+          teamId: team._id,
+          teamName: team.name,
+          addedMembers: addedUsers.map(u => ({ id: u._id, name: u.name, email: u.email })),
+          count: newIds.length,
+        },
+      });
+    }
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -529,6 +576,18 @@ router.delete('/teams/:id/members/:userId', protect, authorize('admin'), async (
       .populate('members', 'name email role')
       .populate('teamLead', 'name email')
       .lean();
+
+    await audit.log('team_member_removed', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        teamId: team._id,
+        teamName: team.name,
+        removedUserId: req.params.userId,
+        removedUserEmail: removedUser?.email || null,
+      },
+    });
 
     res.json(updated);
   } catch (err) {
@@ -576,6 +635,20 @@ router.patch('/teams/:id/lead', protect, authorize('admin'), async (req, res) =>
       .populate('teamLead', 'name email')
       .lean();
 
+    const assignedUser = await User.findById(userId).select('name email').lean();
+    await audit.log('team_lead_assigned', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        teamId: team._id,
+        teamName: team.name,
+        newLeadId: userId,
+        newLeadName: assignedUser?.name || null,
+        newLeadEmail: assignedUser?.email || null,
+      },
+    });
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -592,6 +665,17 @@ router.delete('/teams/:id', protect, authorize('admin'), async (req, res) => {
     if (team.teamLead) {
       await User.findByIdAndUpdate(team.teamLead, { role: 'user' });
     }
+
+    await audit.log('team_deleted', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        teamId: team._id,
+        teamName: team.name,
+        memberCount: team.members.length,
+      },
+    });
 
     await team.deleteOne();
 
@@ -835,6 +919,44 @@ router.get('/users/:id/profile-analytics', protect, authorize('admin'), async (r
       checklistFailureBreakdown,
       qualityScoreTrend,
       recentReports,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/audit-logs?action=login_failed&page=1&limit=50
+router.get('/audit-logs', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { action, page = 1, limit = 50 } = req.query;
+    const filter = {};
+    if (action) filter.action = action;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [logs, total] = await Promise.all([
+      AuditLog.find(filter)
+        .populate('userId', 'name email role')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      AuditLog.countDocuments(filter),
+    ]);
+
+    // Summary counts for the last 24h
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [successCount, failedCount, inactiveCount] = await Promise.all([
+      AuditLog.countDocuments({ action: 'login_success', createdAt: { $gte: since24h } }),
+      AuditLog.countDocuments({ action: 'login_failed', createdAt: { $gte: since24h } }),
+      AuditLog.countDocuments({ action: 'login_inactive', createdAt: { $gte: since24h } }),
+    ]);
+
+    res.json({
+      logs,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+      summary24h: { successCount, failedCount, inactiveCount },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

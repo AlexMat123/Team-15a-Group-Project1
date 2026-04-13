@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const dotenv = require('dotenv');
+const mongoSanitize = require('express-mongo-sanitize');
+const xss = require('xss');
 const connectDB = require('./config/db');
 const seedAdmin = require('./utils/seedAdmin');
 
@@ -13,9 +15,31 @@ connectDB().then(() => {
   seedAdmin();
 });
 
+// Trust the first proxy hop so req.ip and x-forwarded-for are populated correctly
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Sanitize data to prevent NoSQL injection
+app.use(mongoSanitize());
+
+// Recursively sanitize all string values in req.body against XSS
+app.use((req, _res, next) => {
+  const sanitizeValue = (val) => {
+    if (typeof val === 'string') return xss(val);
+    if (Array.isArray(val)) return val.map(sanitizeValue);
+    if (val && typeof val === 'object') {
+      return Object.fromEntries(
+        Object.entries(val).map(([k, v]) => [k, sanitizeValue(v)])
+      );
+    }
+    return val;
+  };
+  if (req.body) req.body = sanitizeValue(req.body);
+  next();
+});
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/training', express.static(path.join(__dirname, 'training')));
