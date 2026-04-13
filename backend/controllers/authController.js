@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Team = require('../models/Team');
 const Report = require('../models/Report');
 const generateToken = require('../utils/generateToken');
+const audit = require('../services/auditService');
 
 const login = async (req, res) => {
   try {
@@ -15,21 +16,80 @@ const login = async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() });
 
     if (!user) {
+      await audit.log('login_failed', {
+        req,
+        email,
+        details: { reason: 'User not found' },
+      });
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    // Check if account is currently locked out
+    if (user.lockoutUntil && user.lockoutUntil > new Date()) {
+      const minutesLeft = Math.ceil((user.lockoutUntil - Date.now()) / 60000);
+      await audit.log('login_blocked_lockout', {
+        req,
+        userId: user._id,
+        email: user.email,
+        details: { reason: 'Account locked', lockoutUntil: user.lockoutUntil, minutesLeft },
+      });
+      return res.status(401).json({
+        message: `Account is temporarily locked. Try again in ${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''}.`,
+      });
+    }
+
     if (user.status === 'inactive') {
+      await audit.log('login_inactive', {
+        req,
+        userId: user._id,
+        email: user.email,
+        details: { reason: 'Account inactive' },
+      });
       return res.status(401).json({ message: 'Account is inactive. Contact your administrator.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
+      user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+
+      if (user.failedLoginAttempts >= 5) {
+        user.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000);
+        user.failedLoginAttempts = 0;
+        await user.save();
+        await audit.log('account_locked', {
+          req,
+          userId: user._id,
+          email: user.email,
+          details: { reason: 'Too many failed login attempts', lockedUntil: user.lockoutUntil },
+        });
+        return res.status(401).json({
+          message: 'Account locked due to too many failed attempts. Try again in 15 minutes.',
+        });
+      }
+
+      await user.save();
+      await audit.log('login_failed', {
+        req,
+        userId: user._id,
+        email: user.email,
+        details: { reason: 'Wrong password', failedAttempts: user.failedLoginAttempts },
+      });
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    // Successful login — clear any lockout state
+    user.failedLoginAttempts = 0;
+    user.lockoutUntil = null;
     user.lastLogin = new Date();
     await user.save();
+
+    await audit.log('login_success', {
+      req,
+      userId: user._id,
+      email: user.email,
+      details: { role: user.role },
+    });
 
     const token = generateToken(user._id, user.role);
 

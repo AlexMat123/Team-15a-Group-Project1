@@ -77,6 +77,14 @@ const userSchema = new mongoose.Schema(
     lastLogin: {
       type: Date,
     },
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lockoutUntil: {
+      type: Date,
+      default: null,
+    },
     preferences: {
       type: userPreferencesSchema,
       default: () => ({}),
