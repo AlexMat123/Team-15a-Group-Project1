@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { BarChart, Bar, XAxis, YAxis, PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, PieChart, Pie, Cell, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { Users, FileText, AlertTriangle, Clock, Target, Plus, Trash2, CheckCircle2, ChevronDown, ChevronUp, Megaphone, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
@@ -23,6 +23,14 @@ const TeamPage = () => {
   const [confirmRemove, setConfirmRemove] = useState(null);
   const [teamStats, setTeamStats] = useState(null);
   const [showStats, setShowStats] = useState(false);
+  const [comparisonPrimaryUserId, setComparisonPrimaryUserId] = useState('');
+  const [comparisonSecondaryUserId, setComparisonSecondaryUserId] = useState('');
+  const [analyticsRange, setAnalyticsRange] = useState('30');
+  const [comparisonData, setComparisonData] = useState(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonError, setComparisonError] = useState('');
+  const [teamStatsLoading, setTeamStatsLoading] = useState(false);
+  const [teamStatsError, setTeamStatsError] = useState('');
 
   // Goals state
   const [goals, setGoals] = useState([]);
@@ -51,6 +59,27 @@ const TeamPage = () => {
   const [acknowledging, setAcknowledging] = useState(false);
 
   const isTeamLead = user?.role === 'team_leader';
+  const formatDate = (date) =>
+    new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  const fetchTeamStats = async (range = analyticsRange) => {
+    setTeamStatsLoading(true);
+    setTeamStatsError('');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('/api/teams/my-team/stats', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { range },
+      });
+      setTeamStats(res.data);
+      return true;
+    } catch (e) {
+      setTeamStatsError(e.response?.data?.message || 'Failed to load team analytics');
+      return false;
+    } finally {
+      setTeamStatsLoading(false);
+    }
+  };
 
   const fetchGoals = async () => {
     try {
@@ -91,12 +120,7 @@ const TeamPage = () => {
 
         // Fetch stats if team lead
         if (user?.role === 'team_leader') {
-          try {
-            const statsRes = await axios.get('/api/teams/my-team/stats', { headers });
-            setTeamStats(statsRes.data);
-          } catch (e) {
-            console.error('Failed to load team stats:', e);
-          }
+          await fetchTeamStats('30');
         }
       } catch (err) {
         console.error('Failed to load team:', err);
@@ -108,6 +132,16 @@ const TeamPage = () => {
     fetchGoals();
     fetchAnnouncements();
   }, [user?.role]);
+
+  useEffect(() => {
+    if (!showStats) return;
+
+    fetchTeamStats(analyticsRange);
+
+    if (comparisonData && comparisonPrimaryUserId && comparisonSecondaryUserId) {
+      handleFetchComparison();
+    }
+  }, [showStats, analyticsRange]);
 
   const handleOpenAddModal = async () => {
     setAddSearch('');
@@ -159,6 +193,36 @@ const TeamPage = () => {
       setConfirmRemove(null);
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to remove member');
+    }
+  };
+
+  const handleFetchComparison = async () => {
+    if (!comparisonPrimaryUserId || !comparisonSecondaryUserId) {
+      setComparisonError('Select two team members to compare.');
+      return;
+    }
+
+    if (comparisonPrimaryUserId === comparisonSecondaryUserId) {
+      setComparisonError('Choose two different team members.');
+      return;
+    }
+
+    setComparisonLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('/api/teams/my-team/comparison', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          primaryUserId: comparisonPrimaryUserId,
+          secondaryUserId: comparisonSecondaryUserId,
+          range: analyticsRange,
+        },
+      });
+      setComparisonData(res.data);
+    } catch (err) {
+      setComparisonError(err.response?.data?.message || 'Failed to load comparison analytics');
+    } finally {
+      setComparisonLoading(false);
     }
   };
 
@@ -283,6 +347,156 @@ const TeamPage = () => {
     avg_errors_below: 'Avg. Errors Per Report Below',
   };
 
+  const comparisonMetricRows = [
+    { key: 'totalReports', label: 'Reports', suffix: '' },
+    { key: 'analyzedReports', label: 'Analysed Reports', suffix: '' },
+    { key: 'totalErrors', label: 'Errors Found', suffix: '' },
+    { key: 'averageErrorsPerReport', label: 'Avg. Errors / Report', suffix: '' },
+    { key: 'passRate', label: 'Pass Rate', suffix: '%' },
+    { key: 'totalTimeSaved', label: 'Time Saved', suffix: 'h' },
+  ];
+
+  const errorTypeLabelMap = {
+    placeholder: 'Placeholder',
+    consistency: 'Consistency',
+    compliance: 'Compliance',
+    formatting: 'Formatting',
+    missing_data: 'Missing Data',
+  };
+  const errorTypeColors = ['#F97316', '#2563EB', '#DC2626', '#9333EA', '#16A34A'];
+  const teamPassRateChartData = teamStats?.passFailRateTrends?.map((item, index) => ({
+    pointIndex: index,
+    periodLabel: item.periodLabel,
+    analyzedCount: Number(item.analyzedCount ?? 0),
+    passedCount: Number(item.passedCount ?? 0),
+    failedCount: Number(item.failedCount ?? 0),
+    passRate: Number(item.passRate ?? 0),
+  })) || [];
+  const teamQualityScoreMaxValue = teamStats?.qualityScoreTrend?.reduce(
+    (max, report) => Math.max(max, report.qualityScore || 0),
+    0
+  ) ?? 0;
+  const teamQualityScoreChartData = teamStats?.qualityScoreTrend?.map((report, index) => ({
+    pointIndex: index,
+    label: report.filename.length > 18 ? `${report.filename.slice(0, 18)}...` : report.filename,
+    fullLabel: report.filename,
+    score: Number(report.qualityScore ?? 0),
+    date: formatDate(report.createdAt),
+  })) || [];
+  const teamCommonErrorTypeChartData = teamStats?.mostCommonErrorTypes?.map((item, index) => ({
+    name: errorTypeLabelMap[item.type] || item.type,
+    errors: item.count,
+    reportsAffected: item.reportsAffected,
+    fill: errorTypeColors[index % errorTypeColors.length],
+  })) || [];
+  const teamChecklistFailureChartData = teamStats?.checklistFailureBreakdown?.map((item) => ({
+    shortLabel: item.message.length > 28 ? `${item.message.slice(0, 28)}...` : item.message,
+    fullLabel: item.message,
+    count: item.count,
+  })) || [];
+  const comparisonPrimaryScope = comparisonData?.primaryScope || null;
+  const comparisonSecondaryScope = comparisonData?.secondaryScope || null;
+  const comparisonColours = {
+    primary: '#6366f1',
+    secondary: '#10b981',
+  };
+
+  const buildMergedPeriodSeries = (primary = [], secondary = [], valueKey) => {
+    const merged = new Map();
+
+    primary.forEach((item) => {
+      const key = item.periodKey || item.periodLabel || item.period;
+      merged.set(key, {
+        periodKey: key,
+        periodLabel: item.periodLabel || item.period || key,
+        primaryValue: Number(item[valueKey] ?? 0),
+        secondaryValue: null,
+      });
+    });
+
+    secondary.forEach((item) => {
+      const key = item.periodKey || item.periodLabel || item.period;
+      if (!merged.has(key)) {
+        merged.set(key, {
+          periodKey: key,
+          periodLabel: item.periodLabel || item.period || key,
+          primaryValue: null,
+          secondaryValue: null,
+        });
+      }
+      merged.get(key).secondaryValue = Number(item[valueKey] ?? 0);
+    });
+
+    return Array.from(merged.values()).map((item, index) => ({
+      ...item,
+      pointIndex: index,
+    }));
+  };
+
+  const buildMergedErrorTypeSeries = (primary = [], secondary = []) => {
+    const merged = new Map();
+
+    primary.forEach((item) => {
+      merged.set(item.name, {
+        name: item.name,
+        primaryValue: Number(item.value ?? item.errors ?? 0),
+        secondaryValue: 0,
+      });
+    });
+
+    secondary.forEach((item) => {
+      if (!merged.has(item.name)) {
+        merged.set(item.name, {
+          name: item.name,
+          primaryValue: 0,
+          secondaryValue: 0,
+        });
+      }
+      merged.get(item.name).secondaryValue = Number(item.value ?? item.errors ?? 0);
+    });
+
+    return Array.from(merged.values());
+  };
+
+  const buildMergedQualityScoreSeries = (primary = [], secondary = []) => {
+    const maxLength = Math.max(primary.length, secondary.length);
+
+    return Array.from({ length: maxLength }, (_, index) => {
+      const primaryItem = primary[index];
+      const secondaryItem = secondary[index];
+
+      return {
+        pointIndex: index,
+        pointLabel: `Report ${index + 1}`,
+        primaryDate: primaryItem?.createdAt ? formatDate(primaryItem.createdAt) : null,
+        secondaryDate: secondaryItem?.createdAt ? formatDate(secondaryItem.createdAt) : null,
+        primaryValue: primaryItem ? Number(primaryItem.qualityScore ?? 0) : null,
+        secondaryValue: secondaryItem ? Number(secondaryItem.qualityScore ?? 0) : null,
+      };
+    });
+  };
+
+  const comparisonReportsChartData = comparisonData
+    ? buildMergedPeriodSeries(comparisonPrimaryScope?.trendData, comparisonSecondaryScope?.trendData, 'reports')
+    : [];
+  const comparisonPassRateChartData = comparisonData
+    ? buildMergedPeriodSeries(comparisonPrimaryScope?.passFailRateTrends, comparisonSecondaryScope?.passFailRateTrends, 'passRate')
+    : [];
+  const comparisonErrorTypeChartData = comparisonData
+    ? buildMergedErrorTypeSeries(comparisonPrimaryScope?.errorBreakdown, comparisonSecondaryScope?.errorBreakdown)
+    : [];
+  const comparisonQualityScoreChartData = comparisonData
+    ? buildMergedQualityScoreSeries(comparisonPrimaryScope?.qualityScoreTrend, comparisonSecondaryScope?.qualityScoreTrend)
+    : [];
+  const comparisonQualityScoreMaxValue = comparisonQualityScoreChartData.reduce(
+    (max, item) => Math.max(max, item.primaryValue ?? 0, item.secondaryValue ?? 0),
+    0
+  );
+  const comparisonPrimaryHasNoReports = comparisonData && (comparisonPrimaryScope?.summary?.totalReports ?? 0) === 0;
+  const comparisonSecondaryHasNoReports = comparisonData && (comparisonSecondaryScope?.summary?.totalReports ?? 0) === 0;
+  const comparisonPrimaryHasNoAnalysed = comparisonData && (comparisonPrimaryScope?.summary?.analyzedReports ?? 0) === 0;
+  const comparisonSecondaryHasNoAnalysed = comparisonData && (comparisonSecondaryScope?.summary?.analyzedReports ?? 0) === 0;
+
   const getGoalProgress = (goal) => {
     if (!currentStats) return { current: 0, pct: 0, met: false };
     const current = currentStats[goal.type] ?? 0;
@@ -341,7 +555,14 @@ const TeamPage = () => {
                       + Add Members
                     </button>
                     <button
-                      onClick={() => setShowStats(true)}
+                      onClick={() => {
+                        setComparisonError('');
+                        setComparisonData(null);
+                        setComparisonPrimaryUserId('');
+                        setComparisonSecondaryUserId('');
+                        setAnalyticsRange('30');
+                        setShowStats(true);
+                      }}
                       className="text-sm font-medium px-4 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
                     >
                       View Analytics
@@ -738,12 +959,303 @@ const TeamPage = () => {
             )}
 
             {/* Team Analytics Modal — team lead only */}
-            {showStats && teamStats && (
+            {showStats && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Team Analytics</h3>
-                  <p className="text-sm text-gray-500 mb-5">{team.name}</p>
+                <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-5">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Team Analytics</h3>
+                      <p className="text-sm text-gray-500">{team.name}</p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <select
+                        value={analyticsRange}
+                        onChange={(e) => setAnalyticsRange(e.target.value)}
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="7">Last 7 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                        <option value="all">All time</option>
+                      </select>
+                      <button
+                        onClick={() => fetchTeamStats(analyticsRange)}
+                        disabled={teamStatsLoading}
+                        className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {teamStatsLoading ? 'Loading...' : 'Refresh Analytics'}
+                      </button>
+                    </div>
+                  </div>
 
+                  <div className="border border-gray-200 rounded-xl p-4 mb-6">
+                    <h4 className="text-sm font-semibold text-gray-900">Compare Team Members</h4>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Select two people from your team and compare their analytics over a date range.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">First team member</label>
+                        <select
+                          value={comparisonPrimaryUserId}
+                          onChange={(e) => setComparisonPrimaryUserId(e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="">Select a user</option>
+                          {team.members.map((member) => (
+                            <option key={member._id} value={member._id}>
+                              {member.name} ({member.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Second team member</label>
+                        <select
+                          value={comparisonSecondaryUserId}
+                          onChange={(e) => setComparisonSecondaryUserId(e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="">Select a user</option>
+                          {team.members.map((member) => (
+                            <option key={member._id} value={member._id}>
+                              {member.name} ({member.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex items-end">
+                        <div className="w-full rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-600">
+                          Using {analyticsRange === 'all' ? 'all-time' : `last ${analyticsRange} days`} analytics
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 mt-4">
+                      <p className="text-xs text-gray-500">
+                        Comparison is restricted to members of {team.name}.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        {comparisonData && (
+                          <button
+                            onClick={() => {
+                              setComparisonData(null);
+                              setComparisonError('');
+                              setComparisonPrimaryUserId('');
+                              setComparisonSecondaryUserId('');
+                            }}
+                            className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                          >
+                            Clear Comparison
+                          </button>
+                        )}
+                        <button
+                          onClick={handleFetchComparison}
+                          disabled={
+                            comparisonLoading ||
+                            !comparisonPrimaryUserId ||
+                            !comparisonSecondaryUserId ||
+                            comparisonPrimaryUserId === comparisonSecondaryUserId
+                          }
+                          className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          {comparisonLoading ? 'Loading...' : 'Compare Members'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {comparisonError && (
+                      <p className="mt-3 text-sm text-red-600">{comparisonError}</p>
+                    )}
+
+                    {comparisonData && (
+                      <>
+                        {(comparisonPrimaryHasNoReports || comparisonSecondaryHasNoReports || comparisonPrimaryHasNoAnalysed || comparisonSecondaryHasNoAnalysed) && (
+                          <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                            <div className="space-y-2 text-sm">
+                              {comparisonPrimaryHasNoReports && (
+                                <p className="text-indigo-700">{comparisonPrimaryScope?.scopeLabel} has no reports in this range.</p>
+                              )}
+                              {comparisonSecondaryHasNoReports && (
+                                <p className="text-green-700">{comparisonSecondaryScope?.scopeLabel} has no reports in this range.</p>
+                              )}
+                              {!comparisonPrimaryHasNoReports && comparisonPrimaryHasNoAnalysed && (
+                                <p className="text-indigo-700">{comparisonPrimaryScope?.scopeLabel} has reports in this range, but none have been analysed yet.</p>
+                              )}
+                              {!comparisonSecondaryHasNoReports && comparisonSecondaryHasNoAnalysed && (
+                                <p className="text-green-700">{comparisonSecondaryScope?.scopeLabel} has reports in this range, but none have been analysed yet.</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {[comparisonData.primaryScope, comparisonData.secondaryScope].map((scope) => (
+                            <div key={scope.scopeDetails.userId} className="border border-indigo-100 rounded-xl p-4 bg-indigo-50/40">
+                              <div className="mb-3">
+                                <h5 className="text-sm font-semibold text-gray-900">{scope.scopeDetails.userName}</h5>
+                                <p className="text-xs text-gray-500">{scope.scopeDetails.userEmail}</p>
+                                <p className="text-xs text-indigo-600 mt-1">
+                                  {analyticsRange === 'all' ? 'All time' : `Last ${analyticsRange} days`}
+                                </p>
+                              </div>
+
+                              <div className="space-y-2">
+                                {comparisonMetricRows.map((metric) => (
+                                  <div key={metric.key} className="flex items-center justify-between text-sm">
+                                    <span className="text-gray-600">{metric.label}</span>
+                                    <span className="font-semibold text-gray-900">
+                                      {scope.summary[metric.key]}{metric.suffix}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                          <div className="border border-gray-200 rounded-xl p-4">
+                            <h4 className="text-sm font-semibold text-gray-900 mb-3">Reports Over Time</h4>
+                            {comparisonReportsChartData.length > 0 ? (
+                              <ResponsiveContainer width="100%" height={220}>
+                                <LineChart data={comparisonReportsChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                                  <XAxis type="number" dataKey="pointIndex" domain={['dataMin', 'dataMax']} allowDecimals={false} tick={{ fontSize: 10 }} minTickGap={12} tickFormatter={(value) => comparisonReportsChartData[value]?.periodLabel || ''} />
+                                  <YAxis tick={{ fontSize: 12 }} />
+                                  <Tooltip labelFormatter={(label, payload) => payload?.[0]?.payload?.periodLabel || label} />
+                                  <Legend />
+                                  <Line type="linear" dataKey="primaryValue" name={comparisonPrimaryScope?.scopeDetails?.userName || 'Primary'} stroke={comparisonColours.primary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                                  <Line type="linear" dataKey="secondaryValue" name={comparisonSecondaryScope?.scopeDetails?.userName || 'Secondary'} stroke={comparisonColours.secondary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            ) : (
+                              <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">No report trend data available yet.</div>
+                            )}
+                          </div>
+
+                          <div className="border border-gray-200 rounded-xl p-4">
+                            <h4 className="text-sm font-semibold text-gray-900 mb-3">Pass Rate Over Time</h4>
+                            {comparisonPassRateChartData.length > 0 ? (
+                              <ResponsiveContainer width="100%" height={220}>
+                                <LineChart data={comparisonPassRateChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                                  <XAxis type="number" dataKey="pointIndex" domain={['dataMin', 'dataMax']} allowDecimals={false} tick={{ fontSize: 10 }} minTickGap={12} tickFormatter={(value) => comparisonPassRateChartData[value]?.periodLabel || ''} />
+                                  <YAxis domain={[0, 105]} tick={{ fontSize: 12 }} />
+                                  <Tooltip formatter={(value) => [`${value}%`, 'Pass Rate']} labelFormatter={(label, payload) => payload?.[0]?.payload?.periodLabel || label} />
+                                  <Legend />
+                                  <Line type="linear" dataKey="primaryValue" name={comparisonPrimaryScope?.scopeDetails?.userName || 'Primary'} stroke={comparisonColours.primary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                                  <Line type="linear" dataKey="secondaryValue" name={comparisonSecondaryScope?.scopeDetails?.userName || 'Secondary'} stroke={comparisonColours.secondary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            ) : (
+                              <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">No pass rate trend available yet.</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                          <div className="border border-gray-200 rounded-xl p-4">
+                            <h4 className="text-sm font-semibold text-gray-900 mb-3">Quality Score Trend</h4>
+                            {comparisonQualityScoreChartData.length > 0 ? (
+                              <ResponsiveContainer width="100%" height={220}>
+                                <LineChart data={comparisonQualityScoreChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                                  <XAxis type="number" dataKey="pointIndex" domain={['dataMin', 'dataMax']} allowDecimals={false} tick={{ fontSize: 10 }} minTickGap={12} tickFormatter={(value) => comparisonQualityScoreChartData[value]?.pointLabel || ''} />
+                                  <YAxis domain={[0, Math.max(comparisonQualityScoreMaxValue, 105)]} tick={{ fontSize: 12 }} />
+                                  <Tooltip labelFormatter={(label, payload) => payload?.[0]?.payload?.pointLabel || label} />
+                                  <Legend />
+                                  <Line type="linear" dataKey="primaryValue" name={comparisonPrimaryScope?.scopeDetails?.userName || 'Primary'} stroke={comparisonColours.primary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                                  <Line type="linear" dataKey="secondaryValue" name={comparisonSecondaryScope?.scopeDetails?.userName || 'Secondary'} stroke={comparisonColours.secondary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            ) : (
+                              <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">No quality score trend available yet.</div>
+                            )}
+                          </div>
+
+                          <div className="border border-gray-200 rounded-xl p-4">
+                            <h4 className="text-sm font-semibold text-gray-900 mb-3">Most Common Error Types</h4>
+                            {comparisonErrorTypeChartData.length > 0 ? (
+                              <ResponsiveContainer width="100%" height={220}>
+                                <BarChart data={comparisonErrorTypeChartData}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                                  <YAxis />
+                                  <Tooltip />
+                                  <Legend />
+                                  <Bar dataKey="primaryValue" name={comparisonPrimaryScope?.scopeDetails?.userName || 'Primary'} fill={comparisonColours.primary} />
+                                  <Bar dataKey="secondaryValue" name={comparisonSecondaryScope?.scopeDetails?.userName || 'Secondary'} fill={comparisonColours.secondary} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            ) : (
+                              <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">No error type comparison data available yet.</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                          <div className="border border-gray-200 rounded-xl p-4">
+                            <h4 className="text-sm font-semibold text-gray-900 mb-3">Top Common Errors</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm font-semibold text-indigo-700 mb-3">{comparisonPrimaryScope?.scopeDetails?.userName}</p>
+                                {comparisonPrimaryScope?.topErrors?.slice(0, 5).length ? comparisonPrimaryScope.topErrors.slice(0, 5).map((error, idx) => (
+                                  <div key={`comparison-primary-error-${idx}`} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                                    <span className="text-sm text-gray-700 truncate max-w-[80%]">{error.message}</span>
+                                    <span className="text-sm font-semibold text-indigo-600">{error.count}</span>
+                                  </div>
+                                )) : <p className="text-sm text-gray-400">No errors found</p>}
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-green-700 mb-3">{comparisonSecondaryScope?.scopeDetails?.userName}</p>
+                                {comparisonSecondaryScope?.topErrors?.slice(0, 5).length ? comparisonSecondaryScope.topErrors.slice(0, 5).map((error, idx) => (
+                                  <div key={`comparison-secondary-error-${idx}`} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                                    <span className="text-sm text-gray-700 truncate max-w-[80%]">{error.message}</span>
+                                    <span className="text-sm font-semibold text-green-600">{error.count}</span>
+                                  </div>
+                                )) : <p className="text-sm text-gray-400">No errors found</p>}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="border border-gray-200 rounded-xl p-4">
+                            <h4 className="text-sm font-semibold text-gray-900 mb-3">Recent Reports</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm font-semibold text-indigo-700 mb-3">{comparisonPrimaryScope?.scopeDetails?.userName}</p>
+                                {comparisonPrimaryScope?.recentReports?.slice(0, 5).length ? comparisonPrimaryScope.recentReports.slice(0, 5).map((report) => (
+                                  <div key={`comparison-primary-report-${report._id}`} className="rounded-lg bg-gray-50 px-3 py-2 mb-2">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{report.filename}</p>
+                                    <p className="text-xs text-gray-500 mt-1">{report.errorCount} errors · {formatDate(report.createdAt)}</p>
+                                  </div>
+                                )) : <p className="text-sm text-gray-400">No recent reports</p>}
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-green-700 mb-3">{comparisonSecondaryScope?.scopeDetails?.userName}</p>
+                                {comparisonSecondaryScope?.recentReports?.slice(0, 5).length ? comparisonSecondaryScope.recentReports.slice(0, 5).map((report) => (
+                                  <div key={`comparison-secondary-report-${report._id}`} className="rounded-lg bg-gray-50 px-3 py-2 mb-2">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{report.filename}</p>
+                                    <p className="text-xs text-gray-500 mt-1">{report.errorCount} errors · {formatDate(report.createdAt)}</p>
+                                  </div>
+                                )) : <p className="text-sm text-gray-400">No recent reports</p>}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {teamStatsError && (
+                    <p className="mb-4 text-sm text-red-600">{teamStatsError}</p>
+                  )}
+
+                  {!comparisonData && (
+                    <>
                   {/* Stat cards */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <div className="border border-gray-200 rounded-xl p-4">
@@ -842,8 +1354,169 @@ const TeamPage = () => {
                     </p>
                   </div>
 
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 my-6">
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                      <p className="text-2xl font-bold text-green-600">{teamStats.qualityBreakdown?.passed ?? 0}</p>
+                      <p className="text-xs text-gray-500 mt-1">Passed</p>
+                    </div>
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                      <p className="text-2xl font-bold text-red-600">{teamStats.qualityBreakdown?.failed ?? 0}</p>
+                      <p className="text-xs text-gray-500 mt-1">Failed</p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                      <p className="text-2xl font-bold text-amber-600">{teamStats.qualityBreakdown?.uncertain ?? 0}</p>
+                      <p className="text-xs text-gray-500 mt-1">Uncertain</p>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                      <p className="text-2xl font-bold text-gray-600">{teamStats.summary?.pendingReports ?? 0}</p>
+                      <p className="text-xs text-gray-500 mt-1">Pending</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">Reports Over Time</h4>
+                      {teamStats.trendData?.length ? (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={teamStats.trendData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                            <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="reports" fill="#6366f1" />
+                            <Bar dataKey="errors" fill="#ef4444" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">No report trend data available yet.</div>}
+                    </div>
+
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">Pass Rate Over Time</h4>
+                      {teamPassRateChartData.length ? (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <LineChart data={teamPassRateChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                            <XAxis type="number" dataKey="pointIndex" domain={['dataMin', 'dataMax']} allowDecimals={false} tick={{ fontSize: 10 }} minTickGap={12} tickFormatter={(value) => teamPassRateChartData[value]?.periodLabel || ''} />
+                            <YAxis domain={[0, 105]} tick={{ fontSize: 12 }} />
+                            <Tooltip formatter={(value) => [`${value}%`, 'Pass Rate']} labelFormatter={(label, payload) => payload?.[0]?.payload?.periodLabel || label} />
+                            <Line type="linear" dataKey="passRate" name="Pass Rate" stroke="#10b981" strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">No pass rate trend available yet.</div>}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">Quality Score Trend</h4>
+                      {teamQualityScoreChartData.length ? (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <LineChart data={teamQualityScoreChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                            <XAxis type="number" dataKey="pointIndex" domain={['dataMin', 'dataMax']} allowDecimals={false} tick={{ fontSize: 10 }} minTickGap={12} tickFormatter={(value) => teamQualityScoreChartData[value]?.label || ''} />
+                            <YAxis domain={[0, Math.max(teamQualityScoreMaxValue, 105)]} tick={{ fontSize: 12 }} />
+                            <Tooltip formatter={(value) => [`${value}`, 'Quality Score']} labelFormatter={(label, payload) => payload?.[0]?.payload?.fullLabel || label} />
+                            <Line type="linear" dataKey="score" name="Quality Score" stroke="#6366f1" strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">No quality score trend available yet.</div>}
+                    </div>
+
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">Most Common Error Types</h4>
+                      {teamCommonErrorTypeChartData.length ? (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={teamCommonErrorTypeChartData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                            <YAxis />
+                            <Tooltip formatter={(value) => [`${value}`, 'Errors']} />
+                            <Bar dataKey="errors" name="Errors">
+                              {teamCommonErrorTypeChartData.map((entry) => (
+                                <Cell key={entry.name} fill={entry.fill} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">No common error type data available yet.</div>}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">Recurring Checklist Failures</h4>
+                      {teamChecklistFailureChartData.length ? (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={teamChecklistFailureChartData} layout="vertical" margin={{ top: 10, right: 20, left: 20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                            <XAxis type="number" tick={{ fontSize: 12 }} />
+                            <YAxis dataKey="shortLabel" type="category" tick={{ fontSize: 11 }} width={70} />
+                            <Tooltip formatter={(value) => [`${value}`, 'Occurrences']} labelFormatter={(label, payload) => payload?.[0]?.payload?.fullLabel || label} />
+                            <Bar dataKey="count" fill="#6366f1" radius={[0, 6, 6, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">No recurring checklist failures found.</div>}
+                    </div>
+
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">Top Common Errors</h4>
+                      {teamStats.topErrors?.length ? (
+                        <div className="space-y-2">
+                          {teamStats.topErrors.slice(0, 5).map((error, idx) => (
+                            <div key={idx} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                              <span className="text-sm text-gray-700 truncate max-w-[80%]">{error.message}</span>
+                              <span className="text-sm font-semibold text-red-600">{error.count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : <p className="text-sm text-gray-400">No errors found</p>}
+                    </div>
+                  </div>
+
+                  {teamStats.recentReports?.length > 0 && (
+                    <div className="border border-gray-200 rounded-xl p-4 mb-6">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">Recent Reports</h4>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                          <thead>
+                            <tr className="bg-gray-50 text-left text-gray-600">
+                              <th className="px-4 py-3 font-semibold">Filename</th>
+                              <th className="px-4 py-3 font-semibold">Status</th>
+                              <th className="px-4 py-3 font-semibold">Errors</th>
+                              <th className="px-4 py-3 font-semibold">Result</th>
+                              <th className="px-4 py-3 font-semibold">Analyzed By</th>
+                              <th className="px-4 py-3 font-semibold">Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {teamStats.recentReports.map((report) => (
+                              <tr key={report._id} className="border-b border-gray-100 last:border-0">
+                                <td className="px-4 py-3 text-gray-900 truncate max-w-[200px]">{report.filename}</td>
+                                <td className="px-4 py-3">{report.status}</td>
+                                <td className="px-4 py-3 text-gray-600">{report.errorCount}</td>
+                                <td className="px-4 py-3">{report.result || '-'}</td>
+                                <td className="px-4 py-3 text-gray-600">{report.analyzedBy}</td>
+                                <td className="px-4 py-3 text-gray-500">{formatDate(report.createdAt)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                    </>
+                  )}
+
                   <button
-                    onClick={() => setShowStats(false)}
+                    onClick={() => {
+                      setShowStats(false);
+                      setComparisonError('');
+                      setComparisonData(null);
+                      setComparisonPrimaryUserId('');
+                      setComparisonSecondaryUserId('');
+                      setAnalyticsRange('30');
+                    }}
                     className="mt-4 px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
                     Close
