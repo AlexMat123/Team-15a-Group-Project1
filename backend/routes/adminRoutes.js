@@ -8,8 +8,14 @@ const Team = require('../models/Team');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const { trainingUpload, handleUploadError } = require('../middleware/uploadMiddleware');
 const TrainingExample = require('../models/TrainingExample');
+const AuditLog = require('../models/AuditLog');
+const {
+  buildAnalyticsPayload,
+  resolveAnalyticsScope,
+} = require('../services/analyticsService');
 const { buildTrainingExamplesFromLabeledReports, processTrainingExample } = require('../services/trainingService');
 const { sendTeamAssignmentEmail, sendTeamLeadAssignmentEmail, sendTeamRemovalEmail } = require('../services/emailService');
+const audit = require('../services/auditService');
 
 
 // GET /api/admin/stats?range=7d|30d|90d|all&team=teamId&user=userId&result=good|bad|uncertain
@@ -87,222 +93,86 @@ router.get('/stats', protect, authorize('admin'), async (req, res) => {
   }
 });
 
-// GET /api/admin/analytics?level=company|team|user&teamId=xxx&userId=xxx&range=7|30|90|all
+// GET /api/admin/analytics?level=company|team|user&teamId=xxx&userId=xxx&compareTeamId=xxx&compareUserId=xxx&range=7|30|90|all
 router.get('/analytics', protect, authorize('admin'), async (req, res) => {
   try {
-    const { level = 'company', teamId, userId, range = '30' } = req.query;
+    const {
+      level = 'company',
+      teamId,
+      userId,
+      compareTeamId,
+      compareUserId,
+      range = '30',
+    } = req.query;
 
-    const filter = {};
-    let scopeLabel = 'Company-wide';
-    let scopeDetails = null;
+    const comparisonType = level === 'team' ? 'team' : level === 'user' ? 'user' : null;
+    const comparisonId = comparisonType === 'team' ? compareTeamId : compareUserId;
+    const primaryId = comparisonType === 'team' ? teamId : comparisonType === 'user' ? userId : null;
+    const comparisonMode = Boolean(comparisonType && primaryId && comparisonId);
 
-    if (range && range !== 'all') {
-      const days = parseInt(range);
-      if (!isNaN(days) && days > 0) {
-        filter.createdAt = { $gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) };
-      }
+    if (comparisonMode && primaryId === comparisonId) {
+      return res.status(400).json({ message: 'Comparison requires two different selections' });
     }
 
-    if (level === 'team' && teamId) {
-      const team = await Team.findById(teamId).populate('members', 'name email').lean();
-      if (team) {
-        const memberIds = team.members.map((m) => m._id);
-        filter.analyzedBy = { $in: memberIds };
-        scopeLabel = `Team: ${team.name}`;
-        scopeDetails = { teamId: team._id, teamName: team.name, memberCount: team.members.length };
-      }
-    } else if (level === 'user' && userId) {
-      const targetUser = await User.findById(userId).select('name email role').lean();
-      if (targetUser) {
-        filter.analyzedBy = userId;
-        scopeLabel = `User: ${targetUser.name}`;
-        scopeDetails = { userId: targetUser._id, userName: targetUser.name, userEmail: targetUser.email, userRole: targetUser.role };
-      }
-    }
-
-    const reports = await Report.find(filter)
-      .select('filename status errorCount errorSummary timeSaved qualityAssessment createdAt analyzedBy errors')
-      .populate('analyzedBy', 'name email')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const summary = {
-      totalReports: reports.length,
-      analyzedReports: 0,
-      pendingReports: 0,
-      failedReports: 0,
-      totalErrors: 0,
-      averageErrorsPerReport: 0,
-      totalTimeSaved: 0,
-    };
-
-    const errorBreakdown = {
-      placeholder: 0,
-      consistency: 0,
-      compliance: 0,
-      formatting: 0,
-      missing_data: 0,
-    };
-
-    const qualityBreakdown = { good: 0, bad: 0, uncertain: 0 };
-    const checklistFailureCounts = new Map();
-
-    const now = new Date();
-    const days = range === 'all' ? 365 : parseInt(range) || 30;
-    const bucketCount = Math.min(days, 12);
-    const bucketSizeDays = Math.ceil(days / bucketCount);
-
-    const trendBuckets = new Map();
-    for (let i = 0; i < bucketCount; i++) {
-      const bucketEnd = new Date(now.getTime() - i * bucketSizeDays * 24 * 60 * 60 * 1000);
-      const bucketStart = new Date(bucketEnd.getTime() - bucketSizeDays * 24 * 60 * 60 * 1000);
-      const key = bucketEnd.toISOString().slice(0, 10);
-      trendBuckets.set(key, {
-        periodLabel: bucketEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-        periodStart: bucketStart,
-        periodEnd: bucketEnd,
-        reportCount: 0,
-        errorCount: 0,
-        passedCount: 0,
-        failedCount: 0,
-      });
-    }
-
-    const userStats = new Map();
-
-    reports.forEach((report) => {
-      summary.totalErrors += report.errorCount || 0;
-      summary.totalTimeSaved += report.timeSaved || 0;
-
-      if (report.status === 'analyzed') {
-        summary.analyzedReports += 1;
-      } else if (report.status === 'failed') {
-        summary.failedReports += 1;
-      } else {
-        summary.pendingReports += 1;
-      }
-
-      errorBreakdown.placeholder += report.errorSummary?.placeholder || 0;
-      errorBreakdown.consistency += report.errorSummary?.consistency || 0;
-      errorBreakdown.compliance += report.errorSummary?.compliance || 0;
-      errorBreakdown.formatting += report.errorSummary?.formatting || 0;
-      errorBreakdown.missing_data += report.errorSummary?.missing_data || 0;
-
-      const qualityLabel = report.qualityAssessment?.label;
-      if (qualityLabel && qualityBreakdown[qualityLabel] !== undefined) {
-        qualityBreakdown[qualityLabel] += 1;
-      }
-
-      (report.errors || []).forEach((error) => {
-        if (error?.message) {
-          const count = checklistFailureCounts.get(error.message) || 0;
-          checklistFailureCounts.set(error.message, count + 1);
-        }
-      });
-
-      const createdAt = new Date(report.createdAt);
-      for (const [key, bucket] of trendBuckets.entries()) {
-        if (createdAt <= bucket.periodEnd && createdAt > bucket.periodStart) {
-          bucket.reportCount += 1;
-          bucket.errorCount += report.errorCount || 0;
-          if (report.qualityAssessment?.label === 'good') bucket.passedCount += 1;
-          if (report.qualityAssessment?.label === 'bad') bucket.failedCount += 1;
-          break;
-        }
-      }
-
-      if (report.analyzedBy) {
-        const odId = report.analyzedBy._id?.toString() || report.analyzedBy.toString();
-        if (!userStats.has(odId)) {
-          userStats.set(odId, {
-            odId,
-            userName: report.analyzedBy.name || 'Unknown',
-            userEmail: report.analyzedBy.email || '',
-            reportCount: 0,
-            errorCount: 0,
-            passedCount: 0,
-            failedCount: 0,
-          });
-        }
-        const us = userStats.get(odId);
-        us.reportCount += 1;
-        us.errorCount += report.errorCount || 0;
-        if (report.qualityAssessment?.label === 'good') us.passedCount += 1;
-        if (report.qualityAssessment?.label === 'bad') us.failedCount += 1;
-      }
+    const primaryScope = await resolveAnalyticsScope({
+      level,
+      entityId: comparisonType ? primaryId : null,
+      teamModel: Team,
+      userModel: User,
     });
 
-    if (summary.analyzedReports > 0) {
-      summary.averageErrorsPerReport = Number((summary.totalErrors / summary.analyzedReports).toFixed(2));
+    if (!primaryScope) {
+      return res.status(404).json({ message: `${comparisonType === 'team' ? 'Team' : 'User'} not found` });
     }
 
-    const passRate = summary.analyzedReports > 0
-      ? Number(((qualityBreakdown.good / summary.analyzedReports) * 100).toFixed(1))
-      : 0;
+    if (!comparisonMode) {
+      const payload = await buildAnalyticsPayload({
+        filter: primaryScope.filter,
+        scopeLabel: primaryScope.scopeLabel,
+        scopeDetails: primaryScope.scopeDetails,
+        range,
+      });
 
-    const manualTime = parseFloat((summary.totalTimeSaved / 0.16).toFixed(1));
-    const timeSavedPercent = manualTime > 0 ? Math.round((summary.totalTimeSaved / manualTime) * 100) : 0;
+      return res.json({
+        level,
+        range,
+        ...payload,
+      });
+    }
 
-    const errorBreakdownArray = [
-      { name: 'Placeholder', value: errorBreakdown.placeholder },
-      { name: 'Consistency', value: errorBreakdown.consistency },
-      { name: 'Compliance', value: errorBreakdown.compliance },
-      { name: 'Formatting', value: errorBreakdown.formatting },
-      { name: 'Missing Data', value: errorBreakdown.missing_data },
-    ];
+    const secondaryScope = await resolveAnalyticsScope({
+      level,
+      entityId: comparisonId,
+      teamModel: Team,
+      userModel: User,
+    });
 
-    const topErrors = Array.from(checklistFailureCounts.entries())
-      .map(([message, count]) => ({ message, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+    if (!secondaryScope) {
+      return res.status(404).json({ message: `${comparisonType === 'team' ? 'Team' : 'User'} not found` });
+    }
 
-    const trendData = Array.from(trendBuckets.values())
-      .reverse()
-      .map((bucket) => ({
-        period: bucket.periodLabel,
-        reports: bucket.reportCount,
-        errors: bucket.errorCount,
-        passed: bucket.passedCount,
-        failed: bucket.failedCount,
-        passRate: bucket.reportCount > 0 ? Number(((bucket.passedCount / bucket.reportCount) * 100).toFixed(1)) : 0,
-      }));
+    const [primaryPayload, secondaryPayload] = await Promise.all([
+      buildAnalyticsPayload({
+        filter: primaryScope.filter,
+        scopeLabel: primaryScope.scopeLabel,
+        scopeDetails: primaryScope.scopeDetails,
+        range,
+      }),
+      buildAnalyticsPayload({
+        filter: secondaryScope.filter,
+        scopeLabel: secondaryScope.scopeLabel,
+        scopeDetails: secondaryScope.scopeDetails,
+        range,
+      }),
+    ]);
 
-    const userLeaderboard = Array.from(userStats.values())
-      .map((us) => ({
-        ...us,
-        passRate: us.reportCount > 0 ? Number(((us.passedCount / us.reportCount) * 100).toFixed(1)) : 0,
-      }))
-      .sort((a, b) => b.reportCount - a.reportCount)
-      .slice(0, 10);
-
-    const recentReports = reports.slice(0, 10).map((r) => ({
-      _id: r._id,
-      filename: r.filename,
-      status: r.status,
-      errorCount: r.errorCount || 0,
-      qualityLabel: r.qualityAssessment?.label || null,
-      analyzedBy: r.analyzedBy?.name || 'Unknown',
-      createdAt: r.createdAt,
-    }));
-
-    res.json({
+    return res.json({
       level,
       range,
-      scopeLabel,
-      scopeDetails,
-      summary: {
-        ...summary,
-        passRate,
-        manualTime,
-        aiTime: Math.round(manualTime - summary.totalTimeSaved),
-        timeSavedPercent,
-      },
-      errorBreakdown: errorBreakdownArray,
-      qualityBreakdown,
-      trendData,
-      topErrors,
-      userLeaderboard,
-      recentReports,
+      comparisonMode: true,
+      comparisonType,
+      primaryScope: primaryPayload,
+      secondaryScope: secondaryPayload,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -443,6 +313,18 @@ router.post(
         console.error('Background training processing failed:', err.message);
       });
 
+      await audit.log('training_upload', {
+        req,
+        userId: req.user._id,
+        email: req.user.email,
+        details: {
+          exampleId: trainingExample._id,
+          filename: trainingExample.filename,
+          type,
+          fileSize: req.file.size,
+        },
+      });
+
       res.status(201).json({
         message: 'Training example uploaded successfully',
         example: trainingExample,
@@ -485,7 +367,42 @@ router.delete('/training/examples/:id', protect, authorize('admin'), async (req,
 
     await example.deleteOne();
 
+    await audit.log('training_deleted', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        exampleId: example._id,
+        filename: example.filename,
+        type: example.type,
+      },
+    });
+
     res.json({ message: 'Training example deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/admin/training/examples/:id/activate — set a template as the active one
+router.patch('/training/examples/:id/activate', protect, authorize('admin'), async (req, res) => {
+  try {
+    const example = await TrainingExample.findById(req.params.id);
+    if (!example) return res.status(404).json({ message: 'Training example not found' });
+    if (example.type !== 'template') {
+      return res.status(400).json({ message: 'Only template examples can be activated' });
+    }
+    if (example.status !== 'trained') {
+      return res.status(400).json({ message: 'Template must be trained before activating' });
+    }
+
+    // Deactivate any currently active template
+    await TrainingExample.updateMany({ type: 'template', isActive: true }, { isActive: false });
+
+    example.isActive = true;
+    await example.save();
+
+    res.json({ message: 'Template activated', example });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -544,6 +461,13 @@ router.post('/teams', protect, authorize('admin'), async (req, res) => {
       createdBy: req.user._id,
     });
 
+    await audit.log('team_created', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: { teamId: team._id, teamName: team.name },
+    });
+
     res.status(201).json(team);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -597,6 +521,21 @@ router.patch('/teams/:id/members', protect, authorize('admin'), async (req, res)
       .populate('teamLead', 'name email')
       .lean();
 
+    if (newIds.length > 0) {
+      const addedUsers = await User.find({ _id: { $in: newIds } }).select('name email').lean();
+      await audit.log('team_member_added', {
+        req,
+        userId: req.user._id,
+        email: req.user.email,
+        details: {
+          teamId: team._id,
+          teamName: team.name,
+          addedMembers: addedUsers.map(u => ({ id: u._id, name: u.name, email: u.email })),
+          count: newIds.length,
+        },
+      });
+    }
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -637,6 +576,18 @@ router.delete('/teams/:id/members/:userId', protect, authorize('admin'), async (
       .populate('members', 'name email role')
       .populate('teamLead', 'name email')
       .lean();
+
+    await audit.log('team_member_removed', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        teamId: team._id,
+        teamName: team.name,
+        removedUserId: req.params.userId,
+        removedUserEmail: removedUser?.email || null,
+      },
+    });
 
     res.json(updated);
   } catch (err) {
@@ -684,6 +635,20 @@ router.patch('/teams/:id/lead', protect, authorize('admin'), async (req, res) =>
       .populate('teamLead', 'name email')
       .lean();
 
+    const assignedUser = await User.findById(userId).select('name email').lean();
+    await audit.log('team_lead_assigned', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        teamId: team._id,
+        teamName: team.name,
+        newLeadId: userId,
+        newLeadName: assignedUser?.name || null,
+        newLeadEmail: assignedUser?.email || null,
+      },
+    });
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -700,6 +665,17 @@ router.delete('/teams/:id', protect, authorize('admin'), async (req, res) => {
     if (team.teamLead) {
       await User.findByIdAndUpdate(team.teamLead, { role: 'user' });
     }
+
+    await audit.log('team_deleted', {
+      req,
+      userId: req.user._id,
+      email: req.user.email,
+      details: {
+        teamId: team._id,
+        teamName: team.name,
+        memberCount: team.members.length,
+      },
+    });
 
     await team.deleteOne();
 
@@ -943,6 +919,44 @@ router.get('/users/:id/profile-analytics', protect, authorize('admin'), async (r
       checklistFailureBreakdown,
       qualityScoreTrend,
       recentReports,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/audit-logs?action=login_failed&page=1&limit=50
+router.get('/audit-logs', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { action, page = 1, limit = 50 } = req.query;
+    const filter = {};
+    if (action) filter.action = action;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [logs, total] = await Promise.all([
+      AuditLog.find(filter)
+        .populate('userId', 'name email role')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      AuditLog.countDocuments(filter),
+    ]);
+
+    // Summary counts for the last 24h
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [successCount, failedCount, inactiveCount] = await Promise.all([
+      AuditLog.countDocuments({ action: 'login_success', createdAt: { $gte: since24h } }),
+      AuditLog.countDocuments({ action: 'login_failed', createdAt: { $gte: since24h } }),
+      AuditLog.countDocuments({ action: 'login_inactive', createdAt: { $gte: since24h } }),
+    ]);
+
+    res.json({
+      logs,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+      summary24h: { successCount, failedCount, inactiveCount },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

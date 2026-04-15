@@ -15,10 +15,13 @@ import {
   Filter,
   KeyRound,
   Loader2,
+  LogIn,
   Search,
+  Shield,
   Trash2,
   Users,
   X,
+  XCircle,
 } from 'lucide-react';
 import {
   Bar,
@@ -48,6 +51,7 @@ const tabs = [
   { id: 'reports', label: 'Reports' },
   { id: 'training', label: 'AI Training' },
   { id: 'teams', label: 'Teams' },
+  { id: 'security', label: 'Security' },
 ];
 
 const COLORS = ['#6366f1', '#f59e0b', '#ef4444', '#10b981', '#3b82f6'];
@@ -180,16 +184,28 @@ const AdminDashboard = () => {
   const [trainingError, setTrainingError] = useState('');
   const [syncingTraining, setSyncingTraining] = useState(false);
   const [deletingExampleId, setDeletingExampleId] = useState('');
+  const [activatingTemplateId, setActivatingTemplateId] = useState('');
   const [dragActive, setDragActive] = useState(false);
+
+  // --- Security / Audit state ---
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditSummary, setAuditSummary] = useState({ successCount: 0, failedCount: 0, inactiveCount: 0 });
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditFilter, setAuditFilter] = useState('');
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditTotalPages, setAuditTotalPages] = useState(1);
 
   // --- Analytics state ---
   const [analyticsLevel, setAnalyticsLevel] = useState('company');
   const [analyticsTeamId, setAnalyticsTeamId] = useState('');
+  const [analyticsCompareTeamId, setAnalyticsCompareTeamId] = useState('');
   const [analyticsUserId, setAnalyticsUserId] = useState('');
+  const [analyticsCompareUserId, setAnalyticsCompareUserId] = useState('');
   const [analyticsRange, setAnalyticsRange] = useState('30');
   const [analyticsData, setAnalyticsData] = useState(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [analyticsError, setAnalyticsError] = useState('');
+  const [analyticsComparisonEnabled, setAnalyticsComparisonEnabled] = useState(false);
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -363,6 +379,22 @@ const AdminDashboard = () => {
     fetchTeamUserProfile();
   }, [teamFilterUser]);
 
+  const fetchAuditLogs = async (filter = auditFilter, page = auditPage) => {
+    setAuditLoading(true);
+    try {
+      const params = new URLSearchParams({ page, limit: 50 });
+      if (filter) params.append('action', filter);
+      const res = await api.get(`/admin/audit-logs?${params}`);
+      setAuditLogs(res.data.logs);
+      setAuditSummary(res.data.summary24h);
+      setAuditTotalPages(res.data.pages);
+    } catch (err) {
+      console.error('Failed to load audit logs', err);
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
   const fetchTrainingData = async () => {
     setLoadingTraining(true);
     try {
@@ -407,6 +439,22 @@ const AdminDashboard = () => {
       setTrainingError(error.response?.data?.message || 'Failed to upload training example');
     } finally {
       setUploadingTraining(false);
+    }
+  };
+
+  const handleActivateTemplate = async (exampleId) => {
+    setActivatingTemplateId(exampleId);
+    setTrainingMessage('');
+    setTrainingError('');
+
+    try {
+      const response = await api.patch(`/admin/training/examples/${exampleId}/activate`);
+      setTrainingMessage(response.data.message || 'Template activated');
+      await fetchTrainingData();
+    } catch (error) {
+      setTrainingError(error.response?.data?.message || 'Failed to activate template');
+    } finally {
+      setActivatingTemplateId('');
     }
   };
 
@@ -483,9 +531,15 @@ const AdminDashboard = () => {
       const params = new URLSearchParams({ level: analyticsLevel, range: analyticsRange });
       if (analyticsLevel === 'team' && analyticsTeamId) {
         params.append('teamId', analyticsTeamId);
+        if (analyticsComparisonEnabled && analyticsCompareTeamId) {
+          params.append('compareTeamId', analyticsCompareTeamId);
+        }
       }
       if (analyticsLevel === 'user' && analyticsUserId) {
         params.append('userId', analyticsUserId);
+        if (analyticsComparisonEnabled && analyticsCompareUserId) {
+          params.append('compareUserId', analyticsCompareUserId);
+        }
       }
       const response = await api.get(`/admin/analytics?${params.toString()}`);
       setAnalyticsData(response.data);
@@ -504,10 +558,25 @@ const AdminDashboard = () => {
   }, []);
 
   useEffect(() => {
+    if (activeTab === 'security') {
+      fetchAuditLogs(auditFilter, auditPage);
+    }
+  }, [activeTab, auditFilter, auditPage]);
+
+  useEffect(() => {
     if (activeTab === 'analytics') {
       fetchAnalytics();
     }
-  }, [activeTab, analyticsLevel, analyticsTeamId, analyticsUserId, analyticsRange]);
+  }, [
+    activeTab,
+    analyticsLevel,
+    analyticsTeamId,
+    analyticsCompareTeamId,
+    analyticsUserId,
+    analyticsCompareUserId,
+    analyticsRange,
+    analyticsComparisonEnabled,
+  ]);
 
   const stats = [
     { label: 'Total Users', value: users.length, icon: Users, color: 'bg-blue-500' },
@@ -540,6 +609,175 @@ const AdminDashboard = () => {
     formatting: 'Formatting', missing_data: 'Missing Data',
   };
   const errorTypeColors = ['#F97316', '#2563EB', '#DC2626', '#9333EA', '#16A34A'];
+  const adminPassRateChartData = analyticsData?.passFailRateTrends?.map((item, index) => ({
+    pointIndex: index,
+    periodKey: `${item.periodLabel}-${index}`,
+    periodLabel: item.periodLabel,
+    analyzedCount: Number(item.analyzedCount ?? 0),
+    passedCount: Number(item.passedCount ?? 0),
+    failedCount: Number(item.failedCount ?? 0),
+    passRate: Number(item.passRate ?? 0),
+  })) || [];
+  const adminPassRateLabelMap = Object.fromEntries(
+    adminPassRateChartData.map((item) => [item.periodKey, item.periodLabel])
+  );
+  const adminQualityScoreMaxValue = analyticsData?.qualityScoreTrend?.reduce(
+    (max, report) => Math.max(max, report.qualityScore || 0),
+    0
+  ) ?? 0;
+  const adminQualityScoreChartData = analyticsData?.qualityScoreTrend?.map((report, index) => ({
+    pointIndex: index,
+    pointKey: report._id || `${report.filename}-${index}`,
+    label: report.filename.length > 18 ? `${report.filename.slice(0, 18)}...` : report.filename,
+    fullLabel: report.filename,
+    score: Number(report.qualityScore ?? 0),
+    date: formatDate(report.createdAt),
+  })) || [];
+  const adminQualityScoreLabelMap = Object.fromEntries(
+    adminQualityScoreChartData.map((item) => [item.pointKey, item.label])
+  );
+  const adminCommonErrorTypeChartData = analyticsData?.mostCommonErrorTypes?.map((item, index) => ({
+    name: errorTypeLabelMap[item.type] || item.type,
+    errors: item.count,
+    reportsAffected: item.reportsAffected,
+    fill: errorTypeColors[index % errorTypeColors.length],
+  })) || [];
+  const adminChecklistFailureChartData = analyticsData?.checklistFailureBreakdown?.map((item) => ({
+    shortLabel: item.message.length > 28 ? `${item.message.slice(0, 28)}...` : item.message,
+    fullLabel: item.message,
+    count: item.count,
+  })) || [];
+  const analyticsComparisonActive = Boolean(analyticsData?.comparisonMode);
+  const comparisonPrimaryScope = analyticsData?.primaryScope || null;
+  const comparisonSecondaryScope = analyticsData?.secondaryScope || null;
+  const comparisonColours = {
+    primary: '#6366f1',
+    secondary: '#10b981',
+  };
+
+  const buildMergedPeriodSeries = (primary = [], secondary = [], valueKey) => {
+    const merged = new Map();
+
+    primary.forEach((item) => {
+      const key = item.periodKey || item.periodLabel || item.period;
+      merged.set(key, {
+        periodKey: key,
+        periodLabel: item.periodLabel || item.period || key,
+        primaryValue: Number(item[valueKey] ?? 0),
+        secondaryValue: null,
+      });
+    });
+
+    secondary.forEach((item) => {
+      const key = item.periodKey || item.periodLabel || item.period;
+      if (!merged.has(key)) {
+        merged.set(key, {
+          periodKey: key,
+          periodLabel: item.periodLabel || item.period || key,
+          primaryValue: null,
+          secondaryValue: null,
+        });
+      }
+      merged.get(key).secondaryValue = Number(item[valueKey] ?? 0);
+    });
+
+    return Array.from(merged.values()).map((item, index) => ({
+      ...item,
+      pointIndex: index,
+    }));
+  };
+
+  const buildMergedErrorTypeSeries = (primary = [], secondary = []) => {
+    const merged = new Map();
+
+    primary.forEach((item) => {
+      merged.set(item.name, {
+        name: item.name,
+        primaryValue: Number(item.value ?? item.errors ?? 0),
+        secondaryValue: 0,
+      });
+    });
+
+    secondary.forEach((item) => {
+      if (!merged.has(item.name)) {
+        merged.set(item.name, {
+          name: item.name,
+          primaryValue: 0,
+          secondaryValue: 0,
+        });
+      }
+      merged.get(item.name).secondaryValue = Number(item.value ?? item.errors ?? 0);
+    });
+
+    return Array.from(merged.values());
+  };
+
+  const buildMergedQualityScoreSeries = (primary = [], secondary = []) => {
+    const maxLength = Math.max(primary.length, secondary.length);
+
+    return Array.from({ length: maxLength }, (_, index) => {
+      const primaryItem = primary[index];
+      const secondaryItem = secondary[index];
+
+      return {
+        pointIndex: index,
+        pointLabel: `Report ${index + 1}`,
+        primaryDate: primaryItem?.createdAt ? formatDate(primaryItem.createdAt) : null,
+        secondaryDate: secondaryItem?.createdAt ? formatDate(secondaryItem.createdAt) : null,
+        primaryValue: primaryItem ? Number(primaryItem.qualityScore ?? 0) : null,
+        secondaryValue: secondaryItem ? Number(secondaryItem.qualityScore ?? 0) : null,
+      };
+    });
+  };
+
+  const comparisonReportsChartData = analyticsComparisonActive
+    ? buildMergedPeriodSeries(
+        comparisonPrimaryScope?.trendData,
+        comparisonSecondaryScope?.trendData,
+        'reports'
+      )
+    : [];
+  const comparisonPassRateChartData = analyticsComparisonActive
+    ? buildMergedPeriodSeries(
+        comparisonPrimaryScope?.passFailRateTrends,
+        comparisonSecondaryScope?.passFailRateTrends,
+        'passRate'
+      )
+    : [];
+  const comparisonErrorTypeChartData = analyticsComparisonActive
+    ? buildMergedErrorTypeSeries(
+        comparisonPrimaryScope?.errorBreakdown,
+        comparisonSecondaryScope?.errorBreakdown
+      )
+    : [];
+  const comparisonQualityScoreChartData = analyticsComparisonActive
+    ? buildMergedQualityScoreSeries(
+        comparisonPrimaryScope?.qualityScoreTrend,
+        comparisonSecondaryScope?.qualityScoreTrend
+      )
+    : [];
+  const comparisonQualityScoreMaxValue = comparisonQualityScoreChartData.reduce(
+    (max, item) => Math.max(max, item.primaryValue ?? 0, item.secondaryValue ?? 0),
+    0
+  );
+  const comparisonSummaryCards = analyticsComparisonActive
+    ? [
+        ['Total Reports', comparisonPrimaryScope?.summary?.totalReports ?? 0, comparisonSecondaryScope?.summary?.totalReports ?? 0],
+        ['Analysed', comparisonPrimaryScope?.summary?.analyzedReports ?? 0, comparisonSecondaryScope?.summary?.analyzedReports ?? 0],
+        ['Total Errors', comparisonPrimaryScope?.summary?.totalErrors ?? 0, comparisonSecondaryScope?.summary?.totalErrors ?? 0],
+        ['Avg Errors/Report', comparisonPrimaryScope?.summary?.averageErrorsPerReport ?? 0, comparisonSecondaryScope?.summary?.averageErrorsPerReport ?? 0],
+        ['Pass Rate', `${comparisonPrimaryScope?.summary?.passRate ?? 0}%`, `${comparisonSecondaryScope?.summary?.passRate ?? 0}%`],
+        ['Time Saved', `${comparisonPrimaryScope?.summary?.totalTimeSaved ?? 0}h`, `${comparisonSecondaryScope?.summary?.totalTimeSaved ?? 0}h`],
+      ]
+    : [];
+  const comparisonSelectionIncomplete = analyticsComparisonEnabled && (
+    (analyticsLevel === 'team' && analyticsTeamId && !analyticsCompareTeamId) ||
+    (analyticsLevel === 'user' && analyticsUserId && !analyticsCompareUserId)
+  );
+  const comparisonPrimaryHasNoReports = analyticsComparisonActive && (comparisonPrimaryScope?.summary?.totalReports ?? 0) === 0;
+  const comparisonSecondaryHasNoReports = analyticsComparisonActive && (comparisonSecondaryScope?.summary?.totalReports ?? 0) === 0;
+  const comparisonPrimaryHasNoAnalysed = analyticsComparisonActive && (comparisonPrimaryScope?.summary?.analyzedReports ?? 0) === 0;
+  const comparisonSecondaryHasNoAnalysed = analyticsComparisonActive && (comparisonSecondaryScope?.summary?.analyzedReports ?? 0) === 0;
 
   const renderUserProfileStats = (analytics, loading) => {
     if (loading) {
@@ -1394,7 +1632,7 @@ const AdminDashboard = () => {
             {/* Filters */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Analytics Filters</h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 lg:grid-cols-6 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Level</label>
                   <select
@@ -1402,7 +1640,10 @@ const AdminDashboard = () => {
                     onChange={(e) => {
                       setAnalyticsLevel(e.target.value);
                       setAnalyticsTeamId('');
+                      setAnalyticsCompareTeamId('');
                       setAnalyticsUserId('');
+                      setAnalyticsCompareUserId('');
+                      setAnalyticsComparisonEnabled(false);
                     }}
                     className="w-full dark:bg-gray-800 text-gray-700 dark:text-gray-200 border 
                     border-gray-300 rounded-lg px-3 py-2 text-sm"
@@ -1418,7 +1659,13 @@ const AdminDashboard = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Select Team</label>
                     <select
                       value={analyticsTeamId}
-                      onChange={(e) => setAnalyticsTeamId(e.target.value)}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        setAnalyticsTeamId(nextValue);
+                        if (nextValue && nextValue === analyticsCompareTeamId) {
+                          setAnalyticsCompareTeamId('');
+                        }
+                      }}
                       className="w-full dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     >
                       <option value="">All Teams</option>
@@ -1431,16 +1678,58 @@ const AdminDashboard = () => {
 
                 {analyticsLevel === 'user' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Select User</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Select User</label>
                     <select
                       value={analyticsUserId}
-                      onChange={(e) => setAnalyticsUserId(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        setAnalyticsUserId(nextValue);
+                        if (nextValue && nextValue === analyticsCompareUserId) {
+                          setAnalyticsCompareUserId('');
+                        }
+                      }}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800"
                     >
                       <option value="">Select a user...</option>
                       {users.map((u) => (
                         <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
                       ))}
+                    </select>
+                  </div>
+                )}
+
+                {analyticsLevel === 'team' && analyticsComparisonEnabled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Compare With Team</label>
+                    <select
+                      value={analyticsCompareTeamId}
+                      onChange={(e) => setAnalyticsCompareTeamId(e.target.value)}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800"
+                    >
+                      <option value="">Select a team...</option>
+                      {teams
+                        .filter((team) => team._id !== analyticsTeamId)
+                        .map((team) => (
+                          <option key={team._id} value={team._id}>{team.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+
+                {analyticsLevel === 'user' && analyticsComparisonEnabled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Compare With User</label>
+                    <select
+                      value={analyticsCompareUserId}
+                      onChange={(e) => setAnalyticsCompareUserId(e.target.value)}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800"
+                    >
+                      <option value="">Select a user...</option>
+                      {users
+                        .filter((u) => u._id !== analyticsUserId)
+                        .map((u) => (
+                          <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
+                        ))}
                     </select>
                   </div>
                 )}
@@ -1460,11 +1749,31 @@ const AdminDashboard = () => {
                   </select>
                 </div>
 
-                <div className="flex items-end">
+                <div className="flex items-end gap-2">
+                  {analyticsLevel !== 'company' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const enabled = !analyticsComparisonEnabled;
+                        setAnalyticsComparisonEnabled(enabled);
+                        if (!enabled) {
+                          setAnalyticsCompareTeamId('');
+                          setAnalyticsCompareUserId('');
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                        analyticsComparisonEnabled
+                          ? 'bg-indigo-700 text-white'
+                          : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      }`}
+                    >
+                      {analyticsComparisonEnabled ? 'Hide Comparison' : 'Compare'}
+                    </button>
+                  )}
                   <button
                     onClick={fetchAnalytics}
                     disabled={loadingAnalytics}
-                    className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                    className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
                   >
                     {loadingAnalytics ? 'Loading...' : 'Refresh'}
                   </button>
@@ -1478,12 +1787,283 @@ const AdminDashboard = () => {
               </div>
             )}
 
+            {comparisonSelectionIncomplete && (
+              <div className="mb-4 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-sm">
+                Select a second {analyticsLevel === 'team' ? 'team' : 'user'} to load comparison analytics.
+              </div>
+            )}
+
             {loadingAnalytics && !analyticsData ? (
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center text-gray-500 dark:text-gray-400">
                 Loading analytics...
               </div>
             ) : analyticsData ? (
               <>
+                {analyticsComparisonActive ? (
+                  <>
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900 dark:text-white">Analytics Comparison</h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {analyticsRange === 'all' ? 'All time' : `Last ${analyticsRange} days`}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full lg:w-auto">
+                          <div className="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Primary</p>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white mt-1">{comparisonPrimaryScope?.scopeLabel}</p>
+                            {comparisonPrimaryScope?.scopeDetails?.teamName && (
+                              <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Members: {comparisonPrimaryScope.scopeDetails.memberCount}</p>
+                            )}
+                            {comparisonPrimaryScope?.scopeDetails?.userEmail && (
+                              <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">{comparisonPrimaryScope.scopeDetails.userEmail}</p>
+                            )}
+                          </div>
+                          <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Secondary</p>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white mt-1">{comparisonSecondaryScope?.scopeLabel}</p>
+                            {comparisonSecondaryScope?.scopeDetails?.teamName && (
+                              <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Members: {comparisonSecondaryScope.scopeDetails.memberCount}</p>
+                            )}
+                            {comparisonSecondaryScope?.scopeDetails?.userEmail && (
+                              <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">{comparisonSecondaryScope.scopeDetails.userEmail}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {(comparisonPrimaryHasNoReports || comparisonSecondaryHasNoReports || comparisonPrimaryHasNoAnalysed || comparisonSecondaryHasNoAnalysed) && (
+                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-6">
+                        <div className="space-y-2 text-sm">
+                          {comparisonPrimaryHasNoReports && (
+                            <p className="text-indigo-700">
+                              {comparisonPrimaryScope?.scopeLabel} has no reports in this range.
+                            </p>
+                          )}
+                          {comparisonSecondaryHasNoReports && (
+                            <p className="text-green-700">
+                              {comparisonSecondaryScope?.scopeLabel} has no reports in this range.
+                            </p>
+                          )}
+                          {!comparisonPrimaryHasNoReports && comparisonPrimaryHasNoAnalysed && (
+                            <p className="text-indigo-700">
+                              {comparisonPrimaryScope?.scopeLabel} has reports in this range, but none have been analysed yet.
+                            </p>
+                          )}
+                          {!comparisonSecondaryHasNoReports && comparisonSecondaryHasNoAnalysed && (
+                            <p className="text-green-700">
+                              {comparisonSecondaryScope?.scopeLabel} has reports in this range, but none have been analysed yet.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+                      {comparisonSummaryCards.map(([label, primaryValue, secondaryValue]) => (
+                        <div key={label} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
+                          <div className="mt-4 space-y-3">
+                            <div className="flex items-center justify-between rounded-lg bg-indigo-50 dark:bg-indigo-900/20 px-3 py-2">
+                              <span className="text-sm font-medium text-indigo-700 truncate mr-3">{comparisonPrimaryScope?.scopeLabel}</span>
+                              <span className="text-lg font-bold text-indigo-700">{primaryValue}</span>
+                            </div>
+                            <div className="flex items-center justify-between rounded-lg bg-green-50 dark:bg-green-900/20 px-3 py-2">
+                              <span className="text-sm font-medium text-green-700 truncate mr-3">{comparisonSecondaryScope?.scopeLabel}</span>
+                              <span className="text-lg font-bold text-green-700">{secondaryValue}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Reports Over Time</h4>
+                        {comparisonReportsChartData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={comparisonReportsChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                              <XAxis
+                                type="number"
+                                dataKey="pointIndex"
+                                domain={['dataMin', 'dataMax']}
+                                allowDecimals={false}
+                                tick={{ fontSize: 10 }}
+                                minTickGap={12}
+                                tickFormatter={(value) => comparisonReportsChartData[value]?.periodLabel || ''}
+                              />
+                              <YAxis tick={{ fontSize: 12 }} />
+                              <Tooltip labelFormatter={(label, payload) => payload?.[0]?.payload?.periodLabel || label} />
+                              <Legend />
+                              <Line type="linear" dataKey="primaryValue" name={comparisonPrimaryScope?.scopeLabel || 'Primary'} stroke={comparisonColours.primary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                              <Line type="linear" dataKey="secondaryValue" name={comparisonSecondaryScope?.scopeLabel || 'Secondary'} stroke={comparisonColours.secondary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[240px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">No report trend data available yet.</div>
+                        )}
+                      </div>
+
+                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Pass Rate Over Time</h4>
+                        {comparisonPassRateChartData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={comparisonPassRateChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                              <XAxis
+                                type="number"
+                                dataKey="pointIndex"
+                                domain={['dataMin', 'dataMax']}
+                                allowDecimals={false}
+                                tick={{ fontSize: 10 }}
+                                minTickGap={12}
+                                tickFormatter={(value) => comparisonPassRateChartData[value]?.periodLabel || ''}
+                              />
+                              <YAxis domain={[0, 105]} tick={{ fontSize: 12 }} />
+                              <Tooltip formatter={(value) => [`${value}%`, 'Pass Rate']} labelFormatter={(label, payload) => payload?.[0]?.payload?.periodLabel || label} />
+                              <Legend />
+                              <Line type="linear" dataKey="primaryValue" name={comparisonPrimaryScope?.scopeLabel || 'Primary'} stroke={comparisonColours.primary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                              <Line type="linear" dataKey="secondaryValue" name={comparisonSecondaryScope?.scopeLabel || 'Secondary'} stroke={comparisonColours.secondary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[240px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">No pass rate trend available yet.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quality Score Trend</h4>
+                        {comparisonQualityScoreChartData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={comparisonQualityScoreChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                              <XAxis
+                                type="number"
+                                dataKey="pointIndex"
+                                domain={['dataMin', 'dataMax']}
+                                allowDecimals={false}
+                                tick={{ fontSize: 10 }}
+                                minTickGap={12}
+                                tickFormatter={(value) => comparisonQualityScoreChartData[value]?.pointLabel || ''}
+                              />
+                              <YAxis domain={[0, Math.max(comparisonQualityScoreMaxValue, 105)]} tick={{ fontSize: 12 }} />
+                              <Tooltip
+                                formatter={(value, name, entry) => {
+                                  const point = entry?.payload;
+                                  const seriesLabel = name === (comparisonPrimaryScope?.scopeLabel || 'Primary')
+                                    ? `${name}${point?.primaryDate ? ` (${point.primaryDate})` : ''}`
+                                    : `${name}${point?.secondaryDate ? ` (${point.secondaryDate})` : ''}`;
+                                  return [`${value}`, seriesLabel];
+                                }}
+                                labelFormatter={(label, payload) => payload?.[0]?.payload?.pointLabel || label}
+                              />
+                              <Legend />
+                              <Line type="linear" dataKey="primaryValue" name={comparisonPrimaryScope?.scopeLabel || 'Primary'} stroke={comparisonColours.primary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                              <Line type="linear" dataKey="secondaryValue" name={comparisonSecondaryScope?.scopeLabel || 'Secondary'} stroke={comparisonColours.secondary} strokeWidth={3} isAnimationActive={false} connectNulls dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[240px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">No quality score trend available yet.</div>
+                        )}
+                      </div>
+
+                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Most Common Error Types</h4>
+                        {comparisonErrorTypeChartData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <BarChart data={comparisonErrorTypeChartData}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                              <YAxis />
+                              <Tooltip />
+                              <Legend />
+                              <Bar dataKey="primaryValue" name={comparisonPrimaryScope?.scopeLabel || 'Primary'} fill={comparisonColours.primary} />
+                              <Bar dataKey="secondaryValue" name={comparisonSecondaryScope?.scopeLabel || 'Secondary'} fill={comparisonColours.secondary} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[240px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">No error type comparison data available yet.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mb-6">
+                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Common Errors</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-indigo-700 mb-3">{comparisonPrimaryScope?.scopeLabel}</p>
+                            {comparisonPrimaryScope?.topErrors?.length > 0 ? (
+                              <div className="space-y-2">
+                                {comparisonPrimaryScope.topErrors.slice(0, 5).map((error, idx) => (
+                                  <div key={`primary-${idx}`} className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                                    <span className="text-sm text-gray-700 dark:text-gray-300 truncate max-w-[80%]">{error.message}</span>
+                                    <span className="text-sm font-semibold text-indigo-600">{error.count}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : <p className="text-sm text-gray-400 dark:text-gray-500">No errors found</p>}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-green-700 mb-3">{comparisonSecondaryScope?.scopeLabel}</p>
+                            {comparisonSecondaryScope?.topErrors?.length > 0 ? (
+                              <div className="space-y-2">
+                                {comparisonSecondaryScope.topErrors.slice(0, 5).map((error, idx) => (
+                                  <div key={`secondary-${idx}`} className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                                    <span className="text-sm text-gray-700 dark:text-gray-300 truncate max-w-[80%]">{error.message}</span>
+                                    <span className="text-sm font-semibold text-green-600">{error.count}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : <p className="text-sm text-gray-400 dark:text-gray-500">No errors found</p>}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Reports</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-indigo-700 mb-3">{comparisonPrimaryScope?.scopeLabel}</p>
+                            {comparisonPrimaryScope?.recentReports?.length > 0 ? (
+                              <div className="space-y-2">
+                                {comparisonPrimaryScope.recentReports.slice(0, 5).map((report) => (
+                                  <div key={`primary-report-${report._id}`} className="rounded-lg bg-gray-50 dark:bg-gray-700/50 px-3 py-2">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{report.filename}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                      {report.errorCount} errors · {formatDate(report.createdAt)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : <p className="text-sm text-gray-400 dark:text-gray-500">No recent reports</p>}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-green-700 mb-3">{comparisonSecondaryScope?.scopeLabel}</p>
+                            {comparisonSecondaryScope?.recentReports?.length > 0 ? (
+                              <div className="space-y-2">
+                                {comparisonSecondaryScope.recentReports.slice(0, 5).map((report) => (
+                                  <div key={`secondary-report-${report._id}`} className="rounded-lg bg-gray-50 dark:bg-gray-700/50 px-3 py-2">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{report.filename}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                      {report.errorCount} errors · {formatDate(report.createdAt)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : <p className="text-sm text-gray-400 dark:text-gray-500">No recent reports</p>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
                 {/* Scope Label */}
                 <div className="mb-4">
                   <h3 className="text-xl font-bold text-gray-900">{analyticsData.scopeLabel}</h3>
@@ -1577,6 +2157,155 @@ const AdminDashboard = () => {
                     </ResponsiveContainer>
                   </div>
                 )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Pass Rate Over Time</h4>
+                    {adminPassRateChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart
+                          data={adminPassRateChartData}
+                          margin={{ top: 10, right: 20, left: 0, bottom: 10 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                          <XAxis
+                            type="number"
+                            dataKey="pointIndex"
+                            domain={['dataMin', 'dataMax']}
+                            allowDecimals={false}
+                            tick={{ fontSize: 10 }}
+                            minTickGap={12}
+                            tickFormatter={(value) => adminPassRateChartData[value]?.periodLabel || ''}
+                          />
+                          <YAxis domain={[0, 105]} tick={{ fontSize: 12 }} />
+                          <Tooltip
+                            formatter={(value, name) => {
+                              if (name === 'Pass Rate') return [`${value}%`, name];
+                              return [value, name];
+                            }}
+                            labelFormatter={(label, payload) => {
+                              const point = payload?.[0]?.payload;
+                              if (!point) return label;
+                              return `${point.periodLabel} - ${point.passedCount}/${point.analyzedCount} passed`;
+                            }}
+                          />
+                          <Line
+                            type="linear"
+                            dataKey="passRate"
+                            name="Pass Rate"
+                            stroke="#10b981"
+                            strokeWidth={3}
+                            isAnimationActive={false}
+                            connectNulls
+                            dot={false}
+                            activeDot={{ r: 6 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[220px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+                        No pass rate trend available yet.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quality Score Trend</h4>
+                    {adminQualityScoreChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart
+                          data={adminQualityScoreChartData}
+                          margin={{ top: 10, right: 20, left: 0, bottom: 10 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                          <XAxis
+                            type="number"
+                            dataKey="pointIndex"
+                            domain={['dataMin', 'dataMax']}
+                            allowDecimals={false}
+                            tick={{ fontSize: 10 }}
+                            minTickGap={12}
+                            tickFormatter={(value) => adminQualityScoreChartData[value]?.label || ''}
+                          />
+                          <YAxis domain={[0, Math.max(adminQualityScoreMaxValue, 105)]} tick={{ fontSize: 12 }} />
+                          <Tooltip
+                            formatter={(value) => [`${value}`, 'Quality Score']}
+                            labelFormatter={(label, payload) => {
+                              const point = payload?.[0]?.payload;
+                              return point ? `${point.fullLabel} - ${point.date}` : label;
+                            }}
+                          />
+                          <Line
+                            type="linear"
+                            dataKey="score"
+                            name="Quality Score"
+                            stroke="#6366f1"
+                            strokeWidth={3}
+                            isAnimationActive={false}
+                            connectNulls
+                            dot={false}
+                            activeDot={{ r: 6 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[220px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+                        No quality score trend available yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Most Common Error Types</h4>
+                    {adminCommonErrorTypeChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={adminCommonErrorTypeChartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                          <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                          <YAxis />
+                          <Tooltip formatter={(value) => [`${value}`, 'Errors']} />
+                          <Bar dataKey="errors" name="Errors" radius={[6, 6, 0, 0]}>
+                            {adminCommonErrorTypeChartData.map((entry) => (
+                              <Cell key={entry.name} fill={entry.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[220px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+                        No common error type data available yet.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recurring Checklist Failures</h4>
+                    {adminChecklistFailureChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart
+                          data={adminChecklistFailureChartData}
+                          layout="vertical"
+                          margin={{ top: 10, right: 20, left: 20, bottom: 0 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                          <XAxis type="number" tick={{ fontSize: 12 }} />
+                          <YAxis dataKey="shortLabel" type="category" tick={{ fontSize: 11 }} width={70} />
+                          <Tooltip
+                            formatter={(value) => [`${value}`, 'Occurrences']}
+                            labelFormatter={(label, payload) => payload?.[0]?.payload?.fullLabel || label}
+                          />
+                          <Bar dataKey="count" fill="#6366f1" radius={[0, 6, 6, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[220px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+                        No recurring checklist failures found.
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 {/* Time Savings */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
@@ -1721,6 +2450,8 @@ const AdminDashboard = () => {
                       </table>
                     </div>
                   </div>
+                )}
+                  </>
                 )}
               </>
             ) : (
@@ -2139,7 +2870,7 @@ const AdminDashboard = () => {
         {activeTab === 'training' && (
           <section>
             {/* Training Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
               <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-4">
                 <p className="text-2xl font-bold text-green-600">{trainingStats.goodExamples}</p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Good Examples</p>
@@ -2156,11 +2887,18 @@ const AdminDashboard = () => {
                 <p className="text-2xl font-bold text-amber-500">{trainingStats.pendingExamples}</p>
                 <p className="text-sm text-gray-500 dark:text-gray-400 ">Pending</p>
               </div>
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-4">
+                <p className="text-2xl font-bold text-indigo-600">{trainingStats.templates ?? 0}</p>
+                <p className="text-sm text-gray-500">Templates</p>
+              </div>
             </div>
 
             {/* Upload Section */}
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Upload Training Example</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Upload Training Example</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Upload a <span className="text-green-600 font-medium">good</span> or <span className="text-red-500 font-medium">bad</span> example to train the AI quality model, or upload a <span className="text-indigo-600 font-medium">Report Template</span> to teach the system what a completed report should look like.
+              </p>
               <form onSubmit={handleTrainingUpload}>
                 <div
                   className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition ${
@@ -2223,6 +2961,17 @@ const AdminDashboard = () => {
                       />
                       <span className="text-sm text-red-500 font-medium">Bad Example</span>
                     </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="trainingType"
+                        value="template"
+                        checked={trainingType === 'template'}
+                        onChange={(e) => setTrainingType(e.target.value)}
+                        className="text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-indigo-600 font-medium">Report Template</span>
+                    </label>
                   </div>
                   <button
                     type="submit"
@@ -2280,11 +3029,19 @@ const AdminDashboard = () => {
                     </thead>
                     <tbody>
                       {trainingExamples.map((example) => (
-                        <tr key={example._id} className="border-b border-gray-100 last:border-b-0">
-                          <td className="px-4 py-4 text-gray-900">
+                        <tr
+                          key={example._id}
+                          className={`border-b border-gray-100 dark:border-gray-800 last:border-b-0 ${example.isActive ? 'bg-green-50 dark:bg-green-900/10' : ''}`}
+                        >
+                          <td className="px-4 py-4 text-gray-900 dark:text-white">
                             <div className="flex items-center gap-2">
                               <FileText className="w-4 h-4 text-gray-400" />
                               <span className="truncate max-w-[200px]">{example.filename}</span>
+                              {example.isActive && (
+                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 rounded-full px-2 py-0.5">
+                                  <CheckCircle className="w-3 h-3" /> Active
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-4">
@@ -2294,10 +3051,12 @@ const AdminDashboard = () => {
                                   ? 'bg-green-100 text-green-700'
                                   : example.type === 'bad'
                                   ? 'bg-red-100 text-red-700'
+                                  : example.type === 'template'
+                                  ? 'bg-indigo-100 text-indigo-700'
                                   : 'bg-gray-100 text-gray-700'
                               }`}
                             >
-                              {example.type}
+                              {example.type === 'template' ? 'Report Template' : example.type}
                             </span>
                           </td>
                           <td className="px-4 py-4">
@@ -2319,14 +3078,26 @@ const AdminDashboard = () => {
                             {formatDate(example.createdAt)}
                           </td>
                           <td className="px-4 py-4">
-                            <button
-                              onClick={() => handleDeleteTrainingExample(example._id)}
-                              disabled={deletingExampleId === example._id}
-                              className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 disabled:opacity-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              {deletingExampleId === example._id ? 'Deleting...' : 'Delete'}
-                            </button>
+                            <div className="flex items-center gap-3">
+                              {example.type === 'template' && !example.isActive && example.status === 'trained' && (
+                                <button
+                                  onClick={() => handleActivateTemplate(example._id)}
+                                  disabled={activatingTemplateId === example._id}
+                                  className="inline-flex items-center gap-1 text-green-600 hover:text-green-800 disabled:opacity-50 text-sm font-medium"
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                  {activatingTemplateId === example._id ? 'Activating...' : 'Set as Active'}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteTrainingExample(example._id)}
+                                disabled={deletingExampleId === example._id}
+                                className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 disabled:opacity-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                {deletingExampleId === example._id ? 'Deleting...' : 'Delete'}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -3083,6 +3854,232 @@ const AdminDashboard = () => {
               </div>
             )}
           </div>
+        )}
+
+        {/* ── SECURITY TAB ── */}
+        {activeTab === 'security' && (
+          <section className="space-y-6">
+            {/* Log table */}
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-indigo-600" />
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Audit Log</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={auditFilter}
+                    onChange={(e) => { setAuditFilter(e.target.value); setAuditPage(1); }}
+                    className="text-sm border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">All events</option>
+                    <option value="login_success">Successful logins</option>
+                    <option value="login_failed">Failed logins</option>
+                    <option value="login_inactive">Inactive account blocks</option>
+                    <option value="account_locked">Account lockouts</option>
+                    <option value="login_blocked_lockout">Blocked — locked account</option>
+                    <option value="report_deleted">Report deletions</option>
+                    <option value="training_upload">Training uploads</option>
+                    <option value="training_deleted">Training deletions</option>
+                    <option value="team_created">Team created</option>
+                    <option value="team_deleted">Team deleted</option>
+                    <option value="team_member_added">Member added</option>
+                    <option value="team_member_removed">Member removed</option>
+                    <option value="team_lead_assigned">Team lead assigned</option>
+                  </select>
+                  <button
+                    onClick={() => fetchAuditLogs(auditFilter, auditPage)}
+                    className="text-sm border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              {auditLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                </div>
+              ) : auditLogs.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-10">No log entries found.</p>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 dark:bg-gray-800 text-left text-gray-600 dark:text-gray-300">
+                          <th className="px-4 py-3 font-semibold">Event</th>
+                          <th className="px-4 py-3 font-semibold">User / Email</th>
+                          <th className="px-4 py-3 font-semibold">IP Address</th>
+                          <th className="px-4 py-3 font-semibold">Details</th>
+                          <th className="px-4 py-3 font-semibold">Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {auditLogs.map((log) => (
+                          <tr key={log._id} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                            <td className="px-4 py-3">
+                              {log.action === 'login_success' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                  <LogIn className="w-3 h-3" /> Login success
+                                </span>
+                              )}
+                              {log.action === 'login_failed' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                  <XCircle className="w-3 h-3" /> Login failed
+                                </span>
+                              )}
+                              {log.action === 'login_inactive' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                  <AlertTriangle className="w-3 h-3" /> Inactive account
+                                </span>
+                              )}
+                              {log.action === 'account_locked' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-200 text-red-800">
+                                  <KeyRound className="w-3 h-3" /> Account locked
+                                </span>
+                              )}
+                              {log.action === 'login_blocked_lockout' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                                  <KeyRound className="w-3 h-3" /> Blocked — locked
+                                </span>
+                              )}
+                              {log.action === 'report_deleted' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                  <Trash2 className="w-3 h-3" /> Report deleted
+                                </span>
+                              )}
+                              {log.action === 'training_upload' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
+                                  <FileText className="w-3 h-3" /> Training upload
+                                </span>
+                              )}
+                              {log.action === 'training_deleted' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
+                                  <Trash2 className="w-3 h-3" /> Training deleted
+                                </span>
+                              )}
+                              {log.action === 'team_created' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                                  <Users className="w-3 h-3" /> Team created
+                                </span>
+                              )}
+                              {log.action === 'team_deleted' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                  <Users className="w-3 h-3" /> Team deleted
+                                </span>
+                              )}
+                              {log.action === 'team_member_added' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                  <Users className="w-3 h-3" /> Member added
+                                </span>
+                              )}
+                              {log.action === 'team_member_removed' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                  <Users className="w-3 h-3" /> Member removed
+                                </span>
+                              )}
+                              {log.action === 'team_lead_assigned' && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
+                                  <Users className="w-3 h-3" /> Lead assigned
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              {log.userId?.name ? (
+                                <div>
+                                  <p className="font-medium text-gray-900 dark:text-white">{log.userId.name}</p>
+                                  <p className="text-xs text-gray-500">{log.email}</p>
+                                </div>
+                              ) : (
+                                <span className="text-gray-500">{log.email || '—'}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-mono text-xs">
+                              {log.ip || '—'}
+                            </td>
+                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">
+                              {log.details?.filename && (
+                                <span className="font-medium text-gray-700 dark:text-gray-300">{log.details.filename}</span>
+                              )}
+                              {log.details?.type && (
+                                <span className="ml-1 text-indigo-500">({log.details.type})</span>
+                              )}
+                              {log.details?.reason && !log.details?.filename && (
+                                <span>{log.details.reason}</span>
+                              )}
+                              {log.details?.role && !log.details?.filename && (
+                                <span>{log.details.role}</span>
+                              )}
+                              {log.details?.deletedBy && (
+                                <span className="ml-1 text-gray-400">by {log.details.deletedBy}</span>
+                              )}
+                              {log.details?.teamName && !log.details?.filename && (
+                                <span className="font-medium text-gray-700 dark:text-gray-300">{log.details.teamName}</span>
+                              )}
+                              {log.details?.newLeadName && (
+                                <span className="ml-1 text-indigo-600">→ {log.details.newLeadName}</span>
+                              )}
+                              {log.details?.removedUserEmail && (
+                                <span className="ml-1 text-gray-500">{log.details.removedUserEmail}</span>
+                              )}
+                              {log.details?.count > 0 && (
+                                <span className="ml-1 text-gray-400">({log.details.count} member{log.details.count !== 1 ? 's' : ''})</span>
+                              )}
+                              {log.details?.memberCount !== undefined && log.action === 'team_deleted' && (
+                                <span className="ml-1 text-gray-400">({log.details.memberCount} member{log.details.memberCount !== 1 ? 's' : ''})</span>
+                              )}
+                              {log.details?.failedAttempts > 0 && (
+                                <span className="ml-1 text-red-500">({log.details.failedAttempts}/5 attempts)</span>
+                              )}
+                              {log.details?.lockedUntil && (
+                                <span className="ml-1 text-red-600 font-medium">
+                                  — until {new Date(log.details.lockedUntil).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                              {log.details?.minutesLeft && (
+                                <span className="ml-1 text-orange-600">({log.details.minutesLeft}m remaining)</span>
+                              )}
+                              {!log.details?.filename && !log.details?.reason && !log.details?.role && '—'}
+                            </td>
+                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">
+                              {new Date(log.createdAt).toLocaleString('en-GB', {
+                                day: '2-digit', month: 'short', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit',
+                              })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination */}
+                  {auditTotalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                      <p className="text-sm text-gray-500">Page {auditPage} of {auditTotalPages}</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setAuditPage((p) => Math.max(1, p - 1))}
+                          disabled={auditPage === 1}
+                          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => setAuditPage((p) => Math.min(auditTotalPages, p + 1))}
+                          disabled={auditPage === auditTotalPages}
+                          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
         )}
 
       </main>

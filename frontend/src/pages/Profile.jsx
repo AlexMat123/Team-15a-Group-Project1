@@ -86,7 +86,7 @@ const Profile = () => {
           icon: FileText,
         },
         {
-          label: 'Analyzed Reports',
+          label: 'Analysed Reports',
           value: analytics.summary?.analyzedReports ?? 0,
           icon: CheckCircle,
         },
@@ -285,7 +285,7 @@ const Profile = () => {
                 id="analytics-scope"
                 value={selectedScope}
                 onChange={(event) => setSelectedScope(event.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900"
               >
                 <option value="week">Week</option>
                 <option value="month">Month</option>
@@ -354,7 +354,7 @@ const Profile = () => {
               <div className="mt-8">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Average Errors Per Report</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  The average number of each error type found per analyzed report.
+                  The average number of each error type found per analysed report.
                 </p>
 
                 <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
@@ -372,7 +372,7 @@ const Profile = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                     <div className="rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 p-4">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Analyzed Reports</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Analysed Reports</p>
                       <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
                         {analytics.summary?.analyzedReports ?? 0}
                       </p>
@@ -390,7 +390,10 @@ const Profile = () => {
               <div className="mt-8">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Pass Rate Over Time</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Monthly pass percentage based on analyzed reports marked as passed.
+                  Monthly pass percentage based on analysed reports marked as passed.
+                </p>
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                  This chart is built from your uploaded reports in the selected time range, grouped by date and matched against each analysed report&apos;s stored quality assessment, and it is used to show whether the share of reports passing automated review is improving, declining, or staying consistent over time.
                 </p>
 
                 <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
@@ -433,6 +436,9 @@ const Profile = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Per-report quality score over time based on the stored quality assessment.
                 </p>
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                  This trend uses the stored quality score from each analysed report&apos;s quality assessment, converts it into a percentage, and orders the latest reports by upload date so you can see how individual report quality changes and spot drops or improvement more easily.
+                </p>
 
                 <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
                   {analytics.qualityScoreTrend?.length ? (
@@ -462,7 +468,7 @@ const Profile = () => {
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">No analyzed reports with quality scores yet.</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No analysed reports with quality scores yet.</p>
                   )}
                 </div>
               </div>
@@ -471,6 +477,9 @@ const Profile = () => {
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Most Common Error Types</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Ranked by frequency so you can see the patterns affecting your reports most often.
+                </p>
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                  This breakdown comes from the stored error summaries on your analysed reports, where detected issues are grouped into categories such as placeholder, consistency, compliance, formatting, and missing data, and it is used to highlight which types of problems appear most often across your work.
                 </p>
 
                 <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
@@ -496,7 +505,10 @@ const Profile = () => {
               <div className="mt-8">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Top Recurring Checklist Failures</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  The most frequently repeated issue messages across all analyzed reports.
+                  The most frequently repeated issue messages across all analysed reports.
+                </p>
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                  This chart is generated from the individual error messages stored on each analysed report rather than just the broad error categories, and it is used to show the exact checklist failures that recur most often so you can target the specific causes behind repeated issues.
                 </p>
 
                 <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
@@ -599,7 +611,7 @@ const Profile = () => {
                                       {report.errorCount} {report.errorCount === 1 ? 'error' : 'errors'}
                                     </span>
                                   ) : (
-                                    <span className="text-gray-400">-</span>
+                                    <span className="text-gray-400 dark:text-gray-500">-</span>
                                   )}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap">
