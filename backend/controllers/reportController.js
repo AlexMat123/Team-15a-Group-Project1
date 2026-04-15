@@ -5,6 +5,7 @@ const { processDocument } = require('../services/pdfService');
 const { analyzeDocument } = require('../services/errorDetection');
 const { predictQualityFromTraining } = require('../services/trainingService');
 const { generateReportPdf } = require('../services/reportPdfService');
+const { generateAnnotatedPdf } = require('../services/annotatedPdfService');
 const fs = require('fs');
 const path = require('path');
 
@@ -613,6 +614,57 @@ const downloadReport = async (req, res) => {
   }
 };
 
+const downloadAnnotatedPdf = async (req, res) => {
+  console.log('=== downloadAnnotatedPdf called for report:', req.params.id, '===');
+  try {
+    const report = await Report.findById(req.params.id);
+
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    if (
+      req.user.role === 'user' &&
+      report.analyzedBy.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    if (report.status !== 'analyzed') {
+      return res.status(400).json({ message: 'Report has not been analyzed yet' });
+    }
+
+    if (!report.filePath) {
+      return res.status(400).json({ message: 'Original PDF file path not found in database' });
+    }
+
+    if (!fs.existsSync(report.filePath)) {
+      return res.status(400).json({ message: `Original PDF file not found on disk: ${report.filePath}` });
+    }
+
+    if (!report.errors || report.errors.length === 0) {
+      return res.status(400).json({ message: 'No errors to annotate' });
+    }
+
+    console.log(`Generating annotated PDF for report ${report._id} with ${report.errors.length} errors`);
+    
+    const annotatedPdf = await generateAnnotatedPdf(report);
+    
+    const sanitisedFilename = report.filename.replace(/\.pdf$/i, '').replace(/[^a-zA-Z0-9-_]/g, '_');
+    const downloadName = `${sanitisedFilename}_ANNOTATED.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+    res.setHeader('Content-Length', annotatedPdf.length);
+    
+    console.log(`Sending annotated PDF: ${downloadName} (${annotatedPdf.length} bytes)`);
+    res.send(annotatedPdf);
+  } catch (error) {
+    console.error('Error generating annotated PDF:', error);
+    res.status(500).json({ message: `Failed to generate annotated PDF: ${error.message}` });
+  }
+};
+
 module.exports = {
   uploadReport,
   analyzeReport,
@@ -623,4 +675,5 @@ module.exports = {
   getProfileAnalytics,
   getReportText,
   downloadReport,
+  downloadAnnotatedPdf,
 };

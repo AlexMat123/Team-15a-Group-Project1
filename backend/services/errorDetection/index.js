@@ -65,7 +65,9 @@ const buildErrorSummary = (errors) => {
 const deduplicateErrors = (errors) => {
   const seen = new Set();
   return errors.filter((error) => {
-    const key = `${error.type}-${(error.message || '').substring(0, 50)}-${error.location?.section || ''}`;
+    const originalText = (error.originalText || '').substring(0, 40).toLowerCase();
+    const lineStart = error.location?.lineStart || 0;
+    const key = `${error.type}-${originalText}-${lineStart}`;
     if (seen.has(key)) {
       return false;
     }
@@ -89,6 +91,14 @@ const sortErrorsByType = (errors) => {
 
     if (orderA !== orderB) {
       return orderA - orderB;
+    }
+
+    const sevOrder = { high: 0, medium: 1, low: 2 };
+    const sevA = sevOrder[a.severity] ?? 99;
+    const sevB = sevOrder[b.severity] ?? 99;
+    
+    if (sevA !== sevB) {
+      return sevA - sevB;
     }
 
     return (a.message || '').localeCompare(b.message || '');
