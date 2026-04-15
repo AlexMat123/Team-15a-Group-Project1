@@ -135,14 +135,20 @@ const HowItWorks = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
+      <a
+        href="#how-it-works-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-indigo-700 focus:shadow"
+      >
+        Skip to content
+      </a>
       <Header />
 
-      <main className="flex-1">
-        <section className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+      <main id="how-it-works-content" className="flex-1">
+        <section aria-labelledby="how-it-works-heading" className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
             <div className="grid gap-10 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)] lg:items-start">
               <div className="max-w-3xl">
-                <h1 className="mt-6 text-4xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-5xl">
+                <h1 id="how-it-works-heading" className="mt-6 text-4xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-5xl">
                   How QC Checker works
                 </h1>
                 <p className="mt-4 text-lg text-gray-600 dark:text-gray-300">
@@ -155,7 +161,7 @@ const HowItWorks = () => {
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <Link
                     to={isAuthenticated ? workspaceLink : '/login'}
-                    className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-indigo-700"
+                    className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                   >
                     {isAuthenticated ? 'Open workspace' : 'Sign in to start'}
                     <ArrowRight className="ml-2 h-4 w-4" />
@@ -163,7 +169,7 @@ const HowItWorks = () => {
                   {!isAuthenticated && (
                     <Link
                       to="/login?admin=true"
-                      className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-6 py-3 font-semibold text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                      className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-6 py-3 font-semibold text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 dark:focus-visible:ring-offset-gray-900"
                     >
                       Admin sign in
                     </Link>
@@ -186,10 +192,10 @@ const HowItWorks = () => {
           </div>
         </section>
 
-        <section id="features" className="bg-white dark:bg-gray-900">
+        <section id="features" aria-labelledby="features-heading" className="bg-white dark:bg-gray-900">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
             <div className="max-w-3xl">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Main features</h2>
+              <h2 id="features-heading" className="text-3xl font-bold text-gray-900 dark:text-white">Main features</h2>
               <p className="mt-3 text-gray-600 dark:text-gray-300">
                 These are the main parts of the app that most users will interact with.
               </p>
@@ -212,9 +218,9 @@ const HowItWorks = () => {
           </div>
         </section>
 
-        <section id="common-tasks" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
+        <section id="common-tasks" aria-labelledby="common-tasks-heading" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
           <div>
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Common task: check a report</h2>
+            <h2 id="common-tasks-heading" className="text-3xl font-bold text-gray-900 dark:text-white">Common task: check a report</h2>
             <p className="mt-3 max-w-3xl text-gray-600 dark:text-gray-300">
               For most users, the main workflow is uploading a report and reviewing the analysis result.
             </p>
@@ -263,10 +269,10 @@ const HowItWorks = () => {
           </div>
         </section>
 
-        <section id="results" className="bg-white dark:bg-gray-900">
+        <section id="results" aria-labelledby="results-heading" className="bg-white dark:bg-gray-900">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
             <div className="max-w-3xl">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white">How to read the results</h2>
+              <h2 id="results-heading" className="text-3xl font-bold text-gray-900 dark:text-white">How to read the results</h2>
               <p className="mt-3 text-gray-600 dark:text-gray-300">
                 After a file has been analysed, the app shows status information, error counts, grouped findings, and an overall result label.
               </p>
@@ -287,9 +293,9 @@ const HowItWorks = () => {
           </div>
         </section>
 
-        <section id="help" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
+        <section id="help" aria-labelledby="help-heading" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
           <div>
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Useful things to know</h2>
+            <h2 id="help-heading" className="text-3xl font-bold text-gray-900 dark:text-white">Useful things to know</h2>
             <ul className="mt-6 space-y-4">
               {supportTips.map((tip) => (
                 <li key={tip} className="flex items-start gap-3 text-gray-600 dark:text-gray-300">
