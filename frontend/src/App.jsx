@@ -12,6 +12,7 @@ import TeamPage from './pages/TeamPage';
 import Profile from './pages/Profile'; 
 import Settings from './pages/Settings';
 import HowItWorks from './pages/HowItWorks';
+import getDefaultRouteByRole from './utils/getDefaultRouteByRole';
 
 function HomeRedirect() {
   const { isAuthenticated, user, loading } = useAuth();
@@ -32,7 +33,7 @@ function HomeRedirect() {
     return <Navigate to="/change-password" replace />;
   }
 
-  const redirectPath = user?.role === 'admin' ? '/admin' : '/dashboard';
+  const redirectPath = getDefaultRouteByRole(user?.role);
   return <Navigate to={redirectPath} replace />;
 }
 

@@ -15,17 +15,17 @@ const Header = () => {
           </Link>
 
           <nav className="flex items-center space-x-4">
-            <Link
-              to="/how-it-works"
-              className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-            >
-              How It Works
-            </Link>
             {isAuthenticated ? (
               <>
                 <span className="text-sm text-gray-600 dark:text-gray-300">
                   Welcome, {user?.name}
                 </span>
+                <Link
+                  to="/how-it-works"
+                  className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+                >
+                  How It Works
+                </Link>
                 {user?.team && (
                   <Link
                     to="/team"
@@ -67,6 +67,12 @@ const Header = () => {
             ) : (
               <>
                 <Link
+                  to="/how-it-works"
+                  className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+                >
+                  How It Works
+                </Link>
+                <Link
                   to="/login"
                   className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
                 >
@@ -74,7 +80,7 @@ const Header = () => {
                 </Link>
                 <Link
                   to="/login?admin=true"
-                  className="text-sm bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+                  className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
                 >
                   Admin Login
                 </Link>
