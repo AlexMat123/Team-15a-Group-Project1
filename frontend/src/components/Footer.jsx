@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { FileCheck } from 'lucide-react';
 
 const Footer = () => {
@@ -18,9 +19,21 @@ const Footer = () => {
           <div>
             <h3 className="font-semibold mb-4">Quick Links</h3>
             <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-              <li><a href="#" className="hover:text-gray-900 dark:hover:text-white">About Us</a></li>
-              <li><a href="#" className="hover:text-gray-900 dark:hover:text-white">Features</a></li>
-              <li><a href="#" className="hover:text-gray-900 dark:hover:text-white">Pricing</a></li>
+              <li>
+                <Link to="/how-it-works" className="hover:text-gray-900 dark:hover:text-white">
+                  How It Works
+                </Link>
+              </li>
+              <li>
+                <Link to="/login" className="hover:text-gray-900 dark:hover:text-white">
+                  User Login
+                </Link>
+              </li>
+              <li>
+                <Link to="/login?admin=true" className="hover:text-gray-900 dark:hover:text-white">
+                  Admin Login
+                </Link>
+              </li>
             </ul>
           </div>
 

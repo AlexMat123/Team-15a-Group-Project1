@@ -15,6 +15,12 @@ const Header = () => {
           </Link>
 
           <nav className="flex items-center space-x-4">
+            <Link
+              to="/how-it-works"
+              className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+            >
+              How It Works
+            </Link>
             {isAuthenticated ? (
               <>
                 <span className="text-sm text-gray-600 dark:text-gray-300">
