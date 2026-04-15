@@ -4,6 +4,7 @@ import { Building2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import getDefaultRouteByRole from '../utils/getDefaultRouteByRole';
 
 const Login = () => {
   const [searchParams] = useSearchParams();
@@ -21,7 +22,7 @@ const Login = () => {
   }, [searchParams]);
 
   if (isAuthenticated && !user?.mustChangePassword) {
-    const redirectPath = user?.role === 'user' ? '/dashboard' : '/admin';
+    const redirectPath = getDefaultRouteByRole(user?.role);
     return <Navigate to={redirectPath} replace />;
   }
 
@@ -35,10 +36,8 @@ const Login = () => {
       
       if (userData.mustChangePassword) {
         navigate('/change-password');
-      } else if (userData.role === 'user') {
-        navigate('/dashboard');
       } else {
-        navigate('/admin');
+        navigate(getDefaultRouteByRole(userData.role));
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid credentials. Please try again.');

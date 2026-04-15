@@ -4,6 +4,7 @@ import { KeyRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import getDefaultRouteByRole from '../utils/getDefaultRouteByRole';
 
 const ChangePassword = () => {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ const ChangePassword = () => {
   }
 
   if (!user?.mustChangePassword) {
-    const redirectPath = user?.role === 'user' ? '/dashboard' : '/admin';
+    const redirectPath = getDefaultRouteByRole(user?.role);
     return <Navigate to={redirectPath} replace />;
   }
 
@@ -41,12 +42,8 @@ const ChangePassword = () => {
 
     try {
       await changePassword(null, newPassword);
-      
-      if (user?.role === 'user') {
-        navigate('/dashboard');
-      } else {
-        navigate('/admin');
-      }
+
+      navigate(getDefaultRouteByRole(user?.role));
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to change password. Please try again.');
     } finally {
