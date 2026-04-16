@@ -1,99 +1,99 @@
 const patterns = [
   {
-    name: 'Inconsistent date format',
-    regex: /\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b/g,
-    severity: 'low',
-    suggestion: 'Use consistent date format (e.g., 8th July 2022)',
-    maxIndividual: 2,
-  },
-  {
-    name: 'Double spaces',
-    regex: /  +/g,
-    severity: 'low',
-    suggestion: 'Remove extra spaces',
-  },
-  {
-    name: 'Missing space after period',
-    regex: /\.[A-Z]/g,
-    severity: 'low',
-    suggestion: 'Add space after period',
-  },
-  {
-    name: 'Inconsistent bullet points',
-    regex: /^[\s]*[-•*]\s/gm,
-    severity: 'low',
-    suggestion: 'Use consistent bullet point style',
-    skipCount: true,
-  },
-  {
     name: 'Empty parentheses',
     regex: /\(\s*\)/g,
     severity: 'medium',
     suggestion: 'Remove empty parentheses or add content',
   },
   {
-    name: 'Incomplete sentence',
-    regex: /[a-z]\s*$/gm,
-    severity: 'low',
-    suggestion: 'Sentence may be incomplete - check punctuation',
-    skipCount: true,
+    name: 'Empty square brackets',
+    regex: /\[\s*\]/g,
+    severity: 'medium',
+    suggestion: 'Remove empty brackets or add content',
+  },
+  {
+    name: 'Empty curly brackets',
+    regex: /\{\s*\}/g,
+    severity: 'medium',
+    suggestion: 'Remove empty brackets or add content',
   },
   {
     name: 'Multiple consecutive punctuation',
-    regex: /[.!?]{2,}/g,
+    regex: /[.!?]{3,}/g,
     severity: 'low',
     suggestion: 'Remove duplicate punctuation',
+  },
+  {
+    name: 'Repeated words',
+    regex: /\b(\w{3,})\s+\1\b/gi,
+    severity: 'low',
+    suggestion: 'Remove duplicate word',
+  },
+  {
+    name: 'Lorem ipsum text',
+    regex: /\blorem ipsum\b/gi,
+    severity: 'high',
+    suggestion: 'Replace placeholder text with actual content',
+  },
+  {
+    name: 'Sample/example marker',
+    regex: /\b(SAMPLE|EXAMPLE|DRAFT|TEST)\s+(TEXT|CONTENT|DATA|DOCUMENT|REPORT)\b/gi,
+    severity: 'high',
+    suggestion: 'Replace with actual content',
+  },
+  {
+    name: 'Placeholder name',
+    regex: /\b(John|Jane)\s+(Doe|Smith)\b/gi,
+    severity: 'medium',
+    suggestion: 'Replace placeholder name with actual name',
+  },
+  {
+    name: 'Generic email placeholder',
+    regex: /\b(example|test|sample|your|name)@(example|test|domain)\.(com|org|co\.uk)\b/gi,
+    severity: 'medium',
+    suggestion: 'Replace with actual email address',
+  },
+  {
+    name: 'Generic phone placeholder',
+    regex: /\b(0{4,}|1234567890|0123456789|0000000000)\b/g,
+    severity: 'medium',
+    suggestion: 'Replace with actual phone number',
+  },
+  {
+    name: 'Incomplete sentence ending',
+    regex: /\b(and|or|the|a|an|to|for|with|of|in|on|at|by)\s*[.!?]?\s*$/gm,
+    severity: 'low',
+    suggestion: 'Complete the sentence',
+  },
+  {
+    name: 'Double dash placeholder',
+    regex: /\s--\s/g,
+    severity: 'low',
+    suggestion: 'Replace dash placeholder with actual content',
+  },
+  {
+    name: 'Hash placeholder',
+    regex: /#{3,}/g,
+    severity: 'medium',
+    suggestion: 'Replace hash placeholder with actual content',
+    captureAll: true,
   },
 ];
 
 const detect = (text) => {
   const errors = [];
   const lines = text.split('\n');
-  const reportedPatterns = new Set();
 
   patterns.forEach((pattern) => {
     let match;
     const regex = new RegExp(pattern.regex.source, pattern.regex.flags);
     let matchCount = 0;
+    const maxMatches = pattern.captureAll ? 200 : 20;
 
     while ((match = regex.exec(text)) !== null) {
       matchCount++;
-      
-      if (pattern.skipCount && matchCount > 3) {
-        continue;
-      }
 
-       if (pattern.maxIndividual && matchCount > pattern.maxIndividual) {
-        if (!reportedPatterns.has(pattern.name)) {
-          reportedPatterns.add(pattern.name);
-          errors.push({
-            type: 'formatting',
-            severity: pattern.severity,
-            message: `Additional instances of ${pattern.name.toLowerCase()} found`,
-            location: {
-              section: 'Multiple locations',
-            },
-            suggestion: pattern.suggestion,
-            originalText: `${matchCount}+ instances`,
-          });
-        }
-        continue;
-      }
-
-      if (matchCount > 5) {
-        if (!reportedPatterns.has(pattern.name)) {
-          reportedPatterns.add(pattern.name);
-          errors.push({
-            type: 'formatting',
-            severity: pattern.severity,
-            message: `Multiple instances of ${pattern.name.toLowerCase()} found (${matchCount}+ occurrences)`,
-            location: {
-              section: 'Multiple locations',
-            },
-            suggestion: pattern.suggestion,
-            originalText: `${matchCount}+ instances`,
-          });
-        }
+      if (matchCount > maxMatches) {
         continue;
       }
 

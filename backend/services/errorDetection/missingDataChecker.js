@@ -1,59 +1,49 @@
 const requiredSections = [
   { name: 'Summary', pattern: /\b(1\.\s*)?Summary\b/i },
-  { name: 'Competent Persons', pattern: /\b(2\.\s*)?Competent Persons\b/i },
+  { name: 'Competent Persons', pattern: /\b(2\.\s*)?Competent Persons?\b/i },
   { name: 'Introduction', pattern: /\b(3\.\s*)?Introduction\b/i },
-  { name: 'Premises Details', pattern: /\b(5\.\s*)?Premises Details\b/i },
+  { name: 'Premises Details', pattern: /\b(5\.\s*)?Premises Details?\b/i },
   { name: 'Fire Risk Assessment', pattern: /\b(8\.\s*)?Fire Risk Assessment\b/i },
-  { name: 'Risk Assessment and Action Plan', pattern: /\b(9\.\s*)?Risk Assessment and Action Plan\b/i },
+  { name: 'Risk Assessment and Action Plan', pattern: /\b(9\.\s*)?(Risk Assessment (and|&) )?Action Plan\b/i },
 ];
 
 const requiredFields = [
   {
     name: 'Reference Number',
-    pattern: /Reference Number[\s\S]{0,50}?\d{4,}/i,
+    pattern: /Reference\s*Number[\s:]+\S{4,}/i,
     section: 'Header',
     headerField: true,
     aliases: ['Reference Number', 'Reference'],
   },
   {
     name: 'Visit Date',
-    pattern: /Visit Date[\s\S]{0,50}?\d{1,2}(st|nd|rd|th)?\s+\w+\s+\d{4}/i,
+    pattern: /Visit\s*Date[\s:]+\d{1,2}(st|nd|rd|th)?\s+\w+\s+\d{4}/i,
     section: 'Header',
     headerField: true,
     aliases: ['Visit Date', 'Date of Visit', 'Assessment Date'],
   },
   {
     name: 'Site Address',
-    pattern: /Site Address[\s\S]{0,100}?[A-Z][a-z]+/i,
+    pattern: /Site\s*Address[\s:]+[A-Z0-9][a-zA-Z0-9\s,.-]{10,}/i,
     section: 'Header',
     headerField: true,
     aliases: ['Site Address', 'Address'],
   },
   {
     name: 'Consultant Name',
-    pattern: /Consultant[\s\S]{0,50}?[A-Z][a-z]+\s+[A-Z][a-z]+/i,
+    pattern: /Consultant[\s:]+[A-Z][a-z]+\s+[A-Z][a-z]+/i,
     section: 'Header',
     headerField: true,
     aliases: ['Consultant', 'Assessor'],
   },
   {
-    name: 'Building Height',
-    pattern: /Building Height[\s\S]{0,100}?\d+(\.\d+)?\s*(m|meters|metres)/i,
-    section: '5.7. Construction Details',
-  },
-  {
-    name: 'Number of Storeys',
-    pattern: /Number of Storeys[\s\S]{0,50}?\d+/i,
-    section: '5.7. Construction Details',
-  },
-  {
     name: 'Evacuation Policy',
-    pattern: /Evacuation Policy[\s\S]{0,50}?(Stay Put|Simultaneous|Progressive|Phased)/i,
+    pattern: /Evacuation\s*Policy[\s:]+\S{4,}/i,
     section: '5.9. Fire Evacuation Policy',
   },
   {
     name: 'Risk Level',
-    pattern: /(risk to life|risk level)[\s\S]{0,100}?(trivial|tolerable|moderate|substantial|intolerable)/i,
+    pattern: /(risk\s*to\s*life|risk\s*level|overall\s*risk)[\s:]+\S{4,}/i,
     section: '8. Fire Risk Assessment',
   },
 ];
@@ -61,18 +51,101 @@ const requiredFields = [
 const emptyFieldPatterns = [
   {
     name: 'Empty field with colon',
-    // Keep matching on a single line only to avoid multiline capture noise.
-    pattern: /^([A-Z][A-Za-z0-9&'\/(),.\- ]{2,80}):\s*$/gm,
+    pattern: /^([A-Z][A-Za-z0-9&'\/(),.\- ]{3,40}):\s*$/gm,
     severity: 'medium',
   },
 ];
+
+const IGNORE_EMPTY_FIELD_LABELS = new Set([
+  'table of contents',
+  'contents',
+  'copyright',
+  'draft',
+  'version',
+  'page',
+  'prepared for',
+  'prepared by',
+  'site address',
+  'fire risk assessment',
+  'risk assessment and action plan',
+  'summary',
+  'introduction',
+  'appendix',
+  'section',
+  'note',
+  'notes',
+  'warning',
+  'important',
+  'disclaimer',
+  'confidential',
+  'document control',
+  'revision history',
+  'distribution list',
+  'signature',
+  'annex',
+  'figure',
+  'table',
+  'photo',
+  'image',
+  'drawing',
+  'map',
+  'plan',
+  'floor plan',
+  'site plan',
+  'action',
+  'recommendation',
+  'finding',
+  'observation',
+  'comment',
+  'response',
+  'status',
+  'priority',
+  'category',
+  'type',
+  'description',
+  'details',
+  'information',
+  'result',
+  'conclusion',
+  'assessment',
+  'review',
+  'inspection',
+  'check',
+  'test',
+  'value',
+  'score',
+  'rating',
+  'level',
+  'compliance',
+  'requirement',
+  'guidance',
+  'instruction',
+  'procedure',
+  'policy',
+  'scope',
+  'area',
+  'location',
+  'site',
+  'premises',
+  'building',
+  'property',
+  'client',
+  'owner',
+  'manager',
+  'contact',
+  'email',
+  'telephone',
+  'phone',
+  'address',
+  'postcode',
+]);
 
 const fieldPresent = (text, keyword, options = {}) => {
   const normalizedText = (text || '').toLowerCase();
   const normalizedKeyword = (keyword || '').toLowerCase();
   const windowLength = options.windowLength || 200;
-  const minValueLength = options.minValueLength || 3;
-  const maxValueLength = options.maxValueLength || 80;
+  const minValueLength = options.minValueLength || 4;
+  const maxValueLength = options.maxValueLength || 100;
 
   let startIndex = 0;
   while (startIndex < normalizedText.length) {
@@ -92,9 +165,9 @@ const fieldPresent = (text, keyword, options = {}) => {
 };
 
 const headerFieldPresent = (text, field) => {
-  const headerWindow = (text || '').slice(0, 1500);
+  const headerWindow = (text || '').slice(0, 2000);
   const aliases = field.aliases && field.aliases.length ? field.aliases : [field.name];
-  return aliases.some((alias) => fieldPresent(headerWindow, alias, { windowLength: 250 }));
+  return aliases.some((alias) => fieldPresent(headerWindow, alias, { windowLength: 300 }));
 };
 
 const headerFieldMentioned = (headerFields = {}, field = {}) => {
@@ -111,8 +184,8 @@ const fieldLabelMentioned = (text, keyword) => {
 const isLikelyFieldLabel = (label = '') => {
   const normalized = label.trim().toLowerCase();
   if (!normalized) return false;
-  if (normalized.length > 40) return false;
-  if (/\b(are|were|is|specifies|covers|identified|following)\b/.test(normalized)) return false;
+  if (normalized.length > 50) return false;
+  if (/\b(are|were|is|was|has|have|had|will|would|should|could|can|may|might|must|shall|specifies|covers|identified|following|including|such as)\b/.test(normalized)) return false;
   return true;
 };
 
@@ -120,24 +193,21 @@ const shouldIgnoreFieldLabel = (fieldName = '') => {
   const normalized = fieldName.trim().toLowerCase();
 
   if (!normalized) return true;
-  if (normalized.length < 3 || normalized.length > 80) return true;
+  if (normalized.length < 3 || normalized.length > 50) return true;
   if (/^\d+(\.\d+)*$/.test(normalized)) return true;
 
-  const ignoreFragments = [
-    'table of contents',
-    'copyright',
-    'draft',
-    'version',
-    'page ',
-    'prepared for',
-    'site address',
-    'fire risk assessment -',
-    'risk assessment and action plan',
-  ];
+  if (IGNORE_EMPTY_FIELD_LABELS.has(normalized)) {
+    return true;
+  }
 
-  if (ignoreFragments.some((fragment) => normalized.includes(fragment))) return true;
-  if (/\b\d{5,}\b/.test(normalized)) return true; // report IDs/page artifacts
-  if (normalized.split(/\s+/).length > 8) return true; // likely sentence text, not a field label
+  for (const ignored of IGNORE_EMPTY_FIELD_LABELS) {
+    if (normalized.startsWith(ignored) || normalized.endsWith(ignored)) {
+      return true;
+    }
+  }
+
+  if (/\b\d{5,}\b/.test(normalized)) return true;
+  if (normalized.split(/\s+/).length > 5) return true;
   if (!isLikelyFieldLabel(fieldName)) return true;
 
   return false;
@@ -206,11 +276,15 @@ const detect = (text, sections = [], headerFields = {}) => {
   emptyFieldPatterns.forEach((pattern) => {
     let match;
     const regex = new RegExp(pattern.pattern.source, pattern.pattern.flags);
+    let matchCount = 0;
     
     while ((match = regex.exec(text)) !== null) {
       const fieldName = match[1]?.trim();
       
       if (fieldName && !shouldIgnoreFieldLabel(fieldName)) {
+        matchCount++;
+        if (matchCount > 5) continue;
+        
         errors.push({
           type: 'missing_data',
           severity: pattern.severity,

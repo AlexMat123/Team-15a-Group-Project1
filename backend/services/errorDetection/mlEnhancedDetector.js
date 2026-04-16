@@ -1,11 +1,16 @@
 const mlService = require('../mlService');
 
-const MIN_SECTION_LENGTH_FOR_ML = 50;
-const MIN_CLEAN_PROSE_FOR_ML = 150;
+const MIN_SECTION_LENGTH_FOR_ML = 100;
+const MIN_CLEAN_PROSE_FOR_ML = 200;
+const ML_CONFIDENCE_THRESHOLD = 0.72;
 
 const getCleanProseLength = (content = '') => {
   const normalized = content.replace(/\s+/g, ' ').trim();
   return (normalized.match(/[A-Za-z]/g) || []).length;
+};
+
+const getWordCount = (content = '') => {
+  return content.split(/\s+/).filter(w => w.length > 2).length;
 };
 
 const isAddressLikeSection = (section = {}) => {
@@ -14,11 +19,58 @@ const isAddressLikeSection = (section = {}) => {
   const combined = `${title}\n${content}`;
 
   if (/^[\dA-Za-z\s,.'-]+$/.test(content.trim()) && content.split('\n').length <= 4) {
-    if (/\b(road|street|lane|avenue|close|drive|court|way|liverpool|merseyside|postcode)\b/i.test(combined)) {
+    if (/\b(road|street|lane|avenue|close|drive|court|way|liverpool|merseyside|postcode|london|manchester|birmingham)\b/i.test(combined)) {
       return true;
     }
   }
 
+  return false;
+};
+
+const SKIP_SECTION_PATTERNS = [
+  /^(table of )?contents?$/i,
+  /^executive summary$/i,
+  /^appendix\s*[a-z\d]?$/i,
+  /^glossary$/i,
+  /^references?$/i,
+  /^index$/i,
+  /^cover\s*(page)?$/i,
+  /^title\s*(page)?$/i,
+  /^document\s*(information|control)/i,
+  /^revision\s*history/i,
+  /^amendment\s*record/i,
+  /^distribution\s*list/i,
+  /^disclaimer$/i,
+  /^confidential$/i,
+  /^copyright/i,
+  /^version\s*control/i,
+  /^quality\s*assurance/i,
+  /^abbreviations?$/i,
+  /^acronyms?$/i,
+];
+
+const shouldSkipSection = (section = {}) => {
+  const title = (section.title || '').trim();
+  const content = (section.content || '').trim();
+  
+  if (SKIP_SECTION_PATTERNS.some(pattern => pattern.test(title))) {
+    return true;
+  }
+  
+  if (isAddressLikeSection(section)) {
+    return true;
+  }
+  
+  const nonEmptyLines = content.split('\n').filter(l => l.trim()).length;
+  if (nonEmptyLines <= 2) {
+    return true;
+  }
+  
+  const wordCount = getWordCount(content);
+  if (wordCount < 15) {
+    return true;
+  }
+  
   return false;
 };
 
@@ -31,10 +83,12 @@ const analyzeWithML = async (text, sections = []) => {
   }
 
   try {
-    for (const section of sections.slice(0, 10)) {
+    const eligibleSections = sections.filter(s => !shouldSkipSection(s)).slice(0, 8);
+    
+    for (const section of eligibleSections) {
       if (section.content && section.content.length > MIN_SECTION_LENGTH_FOR_ML) {
         const cleanProseLength = getCleanProseLength(section.content);
-        if (cleanProseLength >= MIN_CLEAN_PROSE_FOR_ML || isAddressLikeSection(section)) {
+        if (cleanProseLength >= MIN_CLEAN_PROSE_FOR_ML) {
           continue;
         }
 
@@ -54,15 +108,23 @@ const analyzeWithML = async (text, sections = []) => {
           );
         }
 
-        if (completeness && !completeness.isComplete && completeness.completenessScore > 0.6) {
+        if (
+          completeness &&
+          !completeness.isComplete &&
+          completeness.completenessScore > ML_CONFIDENCE_THRESHOLD &&
+          (completeness.classification === 'placeholder' ||
+           completeness.classification === 'template')
+        ) {
           errors.push({
-            type: getErrorTypeFromClassification(completeness.classification),
-            severity: completeness.completenessScore > 0.8 ? 'high' : 'medium',
-            message: `Section appears ${completeness.classification}`,
+            type: 'placeholder',
+            severity: completeness.completenessScore > 0.85 ? 'high' : 'medium',
+            message: `Section may contain ${completeness.classification === 'placeholder' ? 'placeholder markers' : 'unfilled template text'}`,
             location: {
               section: section.title,
             },
-            suggestion: getSuggestionForClassification(completeness.classification),
+            suggestion: completeness.classification === 'placeholder' 
+              ? 'Replace placeholder markers with actual content'
+              : 'Complete the template with specific information',
             originalText: section.content.substring(0, 100),
             mlConfidence: completeness.completenessScore,
           });
@@ -76,26 +138,6 @@ const analyzeWithML = async (text, sections = []) => {
   return errors;
 };
 
-const getErrorTypeFromClassification = (classification) => {
-  const mapping = {
-    'contains placeholder text': 'placeholder',
-    'template text not filled in': 'placeholder',
-    'incomplete or missing information': 'missing_data',
-    'partially complete': 'missing_data',
-  };
-  return mapping[classification] || 'consistency';
-};
-
-const getSuggestionForClassification = (classification) => {
-  const suggestions = {
-    'contains placeholder text': 'Replace placeholder text with actual content',
-    'template text not filled in': 'Complete the template with specific information',
-    'incomplete or missing information': 'Add missing details to this section',
-    'partially complete': 'Review and complete all required fields in this section',
-  };
-  return suggestions[classification] || 'Review this section for completeness';
-};
-
 const findSimilarSections = async (sections) => {
   const errors = [];
 
@@ -104,14 +146,18 @@ const findSimilarSections = async (sections) => {
   }
 
   try {
+    const eligibleSections = sections.filter(s => 
+      !shouldSkipSection(s) && 
+      s.content && 
+      s.content.length > 150
+    ).slice(0, 6);
+    
     const embeddings = [];
     
-    for (const section of sections.slice(0, 5)) {
-      if (section.content && section.content.length > 100) {
-        const embedding = await mlService.getEmbedding(section.content.substring(0, 500));
-        if (embedding) {
-          embeddings.push({ section, embedding });
-        }
+    for (const section of eligibleSections) {
+      const embedding = await mlService.getEmbedding(section.content.substring(0, 500));
+      if (embedding) {
+        embeddings.push({ section, embedding });
       }
     }
 
@@ -122,7 +168,14 @@ const findSimilarSections = async (sections) => {
           embeddings[j].embedding
         );
 
-        if (similarity > 0.9 && embeddings[i].section.title !== embeddings[j].section.title) {
+        if (similarity > 0.92 && embeddings[i].section.title !== embeddings[j].section.title) {
+          const title1 = embeddings[i].section.title.toLowerCase();
+          const title2 = embeddings[j].section.title.toLowerCase();
+          
+          if (title1.includes(title2) || title2.includes(title1)) {
+            continue;
+          }
+          
           errors.push({
             type: 'consistency',
             severity: 'medium',

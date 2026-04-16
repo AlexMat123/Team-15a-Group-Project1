@@ -1,14 +1,18 @@
 const checklistConfig = {
   version: 'BAFE-SP205-Appendix-D-2022-v1',
   items: [
-    // Section 1 (A-M)
     {
       id: '1A',
       title: 'Identity of the client',
       severity: 'high',
       sectionHint: 'Header',
       mode: 'any',
-      patterns: [/\b(client|on behalf of|for and on behalf of)\b/i],
+      patterns: [
+        /\bclient\s*:\s*[A-Z][a-zA-Z\s&.,'-]{3,}/i,
+        /\bon behalf of\s+[A-Z][a-zA-Z\s&.,'-]{3,}/i,
+        /\bfor and on behalf of\s+[A-Z][a-zA-Z\s&.,'-]{3,}/i,
+        /\bprepared for\s*:\s*[A-Z][a-zA-Z\s&.,'-]{3,}/i,
+      ],
       suggestion: 'State the client identity in the report header/introduction.',
     },
     {
@@ -17,7 +21,11 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: '5. Premises Details',
       mode: 'any',
-      patterns: [/\b(responsible person|duty holder)\b/i],
+      patterns: [
+        /\bresponsible person\s*:\s*[A-Z][a-zA-Z\s.,'-]{3,}/i,
+        /\bduty holder\s*:\s*[A-Z][a-zA-Z\s.,'-]{3,}/i,
+        /\bresponsible person\b.{0,100}\b[A-Z][a-z]+\s+[A-Z][a-z]+/i,
+      ],
       suggestion: 'Identify the responsible person or duty holder.',
     },
     {
@@ -26,7 +34,11 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: '5. Premises Details',
       mode: 'any',
-      patterns: [/\b(responsib(le|ility).{0,40}fire safety|fire safety manager)\b/i],
+      patterns: [
+        /\bresponsib(le|ility).{0,40}fire safety\b.{0,50}[A-Z][a-z]+/i,
+        /\bfire safety manager\s*:\s*[A-Z][a-zA-Z\s.,'-]{3,}/i,
+        /\bfire safety officer\s*:\s*[A-Z][a-zA-Z\s.,'-]{3,}/i,
+      ],
       suggestion: 'Identify who holds fire safety responsibility at the premises.',
     },
     {
@@ -35,7 +47,11 @@ const checklistConfig = {
       severity: 'medium',
       sectionHint: '2. Competent Persons',
       mode: 'any',
-      patterns: [/\b(competent person|assessor|consultant)\b/i],
+      patterns: [
+        /\bcompetent person\b.{0,50}[A-Z][a-z]+\s+[A-Z][a-z]+/i,
+        /\bassessor\s*:\s*[A-Z][a-zA-Z\s.,'-]{3,}/i,
+        /\bconsultant\s*:\s*[A-Z][a-zA-Z\s.,'-]{3,}/i,
+      ],
       suggestion: 'Identify the competent person appointed to assist with fire precautions.',
     },
     {
@@ -44,7 +60,10 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: '5. Premises Details',
       mode: 'all',
-      patterns: [/\b(site address|location of premises)\b/i, /\b(extent|areas covered|scope)\b/i],
+      patterns: [
+        /\b(site address|location of premises|address)\s*:\s*[A-Z0-9][a-zA-Z0-9\s,.-]{10,}/i,
+        /\b(extent|areas covered|scope of assessment|assessment covers)\b/i,
+      ],
       suggestion: 'State both location and extent/scope of the assessment.',
     },
     {
@@ -53,7 +72,11 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: 'Header',
       mode: 'any',
-      patterns: [/\b(visit date|assessment date|date(s)? of assessment)\b/i],
+      patterns: [
+        /\b(visit date|assessment date)\s*:\s*\d{1,2}(st|nd|rd|th)?\s+\w+\s+\d{4}/i,
+        /\bdate(s)? of assessment\s*:\s*\d{1,2}/i,
+        /\bvisit date\s*:\s*\S{5,}/i,
+      ],
       suggestion: 'Include clear date(s) on which the FRA was carried out.',
     },
     {
@@ -63,8 +86,8 @@ const checklistConfig = {
       sectionHint: '5. Premises Details',
       mode: 'any',
       patterns: [
-        /\b(key individuals?|information obtained|consulted)\b/i,
-        /\b(accompanied|available|on.?site contact).{0,60}(director|manager|officer)\b/i,
+        /\b(information obtained|consulted)\s+(from|with)\s+[A-Z][a-z]+/i,
+        /\b(accompanied by|on.?site contact)\s*:\s*[A-Z][a-zA-Z\s.,'-]{3,}/i,
         /[A-Z][a-z]+\s+[A-Z][a-z]+\s*[-–]\s*(Director|Manager|Officer|Consultant|Assessor)/i,
       ],
       suggestion: 'List key people consulted and their role in the assessment.',
@@ -75,7 +98,10 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: 'Header',
       mode: 'all',
-      patterns: [/\b(review date|review)\b/i, /\b(criteria|trigger|recommended)\b/i],
+      patterns: [
+        /\b(review date|next review|recommended review)\s*:\s*\S{5,}/i,
+        /\b(review criteria|triggers? for review|significant change)\b/i,
+      ],
       suggestion: 'Provide review criteria and a recommended review date.',
     },
     {
@@ -84,7 +110,10 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: '8. Fire Risk Assessment',
       mode: 'any',
-      patterns: [/\b(significant findings?|findings)\b/i],
+      patterns: [
+        /\bsignificant findings?\b.{0,200}\b(identified|found|noted|observed)/i,
+        /\b(key findings?|main findings?|principal findings?)\b/i,
+      ],
       suggestion: 'Document significant findings from the assessment.',
     },
     {
@@ -93,7 +122,10 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: '8. Fire Risk Assessment',
       mode: 'any',
-      patterns: [/\b(overall (assessment )?of risk|risk level|risk to life)\b/i],
+      patterns: [
+        /\b(overall (assessment )?of risk|overall risk level|risk to life)\s*:\s*\S{3,}/i,
+        /\b(trivial|tolerable|moderate|substantial|intolerable)\s+risk\b/i,
+      ],
       suggestion: 'Include an explicit overall risk assessment.',
     },
     {
@@ -102,7 +134,11 @@ const checklistConfig = {
       severity: 'medium',
       sectionHint: '4. Terms and Definitions',
       mode: 'any',
-      patterns: [/\b(relevant legislation|regulatory reform|fire safety order|legislation)\b/i],
+      patterns: [
+        /\bregulatory reform.{0,20}fire safety.{0,20}order\b/i,
+        /\bfire safety order 2005\b/i,
+        /\brelevant legislation\b.{0,100}\b(complian|require|reference)/i,
+      ],
       suggestion: 'Reference and document information required by relevant legislation.',
     },
     {
@@ -111,7 +147,11 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: '9. Risk Assessment and Action Plan',
       mode: 'all',
-      patterns: [/\b(action plan|actions arising|recommendations)\b/i, /\b(severity|priority|urgency)\b/i, /\b(timescale|target date|completion date)\b/i],
+      patterns: [
+        /\b(action plan|actions arising|recommendations?)\b/i,
+        /\b(severity|priority|urgency)\s*:\s*\S{3,}/i,
+        /\b(timescale|target date|completion date|deadline)\s*:\s*\S{3,}/i,
+      ],
       suggestion: 'Provide actions with severity/priority and completion timescales.',
     },
     {
@@ -120,18 +160,24 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: 'Header',
       mode: 'any',
-      patterns: [/\b(reference number|unique reference|ref(erence)?\b)\b/i],
+      patterns: [
+        /\breference\s*(number|no\.?)?\s*:\s*[A-Z0-9/-]{4,}/i,
+        /\bunique reference\s*:\s*\S{4,}/i,
+        /\breport\s*(number|no\.?|ref)\s*:\s*[A-Z0-9/-]{4,}/i,
+      ],
       suggestion: 'Include a unique reference identifier.',
     },
 
-    // Section 2 (A-J)
     {
       id: '2A',
       title: 'Premises/building/process description',
       severity: 'medium',
       sectionHint: '5. Premises Details',
       mode: 'all',
-      patterns: [/\b(description of (the )?premises|description of undertakings|usage)\b/i, /\b(process(es)?|activities)\b/i],
+      patterns: [
+        /\b(description of (the )?premises|premises description|building description)\b/i,
+        /\b(process(es)?|activities|operations?|undertaking)\s+(carried out|on site|at the premises)\b/i,
+      ],
       suggestion: 'Describe premises, building and processes carried out on site.',
     },
     {
@@ -140,7 +186,10 @@ const checklistConfig = {
       severity: 'medium',
       sectionHint: '5. Premises Details',
       mode: 'all',
-      patterns: [/\b(size|sq ft|square (feet|metres)|storeys|staircases?|lift shafts?)\b/i, /\b(construction|building classification|usage|evacuation policy)\b/i],
+      patterns: [
+        /\b(gross internal area|floor area|sq ft|square (feet|metres)|size of premises)\b/i,
+        /\b(number of )?(storeys?|floors?)\s*:\s*\d+/i,
+      ],
       suggestion: 'Include building size and structural/use/evacuation details.',
     },
     {
@@ -149,7 +198,10 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: '5.14. Persons at Risk',
       mode: 'all',
-      patterns: [/\b(occupants?|persons at risk|especially at risk)\b/i, /\b(disabilit|general public|occupancy)\b/i],
+      patterns: [
+        /\b(occupants?|persons?\s+at\s+risk|especially at risk)\b/i,
+        /\b(disabilit|mobility|sensory|cognitive).{0,30}(impair|need|require|assist)/i,
+      ],
       suggestion: 'Document occupants, especially at-risk persons, disability/public-use details and occupancy.',
     },
     {
@@ -158,14 +210,16 @@ const checklistConfig = {
       severity: 'medium',
       sectionHint: '5. Premises Details',
       mode: 'all',
-      // Only apply when there is a real care-setting signal, not just template wording.
       appliesWhenAny: [
         /\b(residential care home|nursing home|care home|assisted living|extra care housing)\b/i,
         /\b(CQC|care quality commission|residents?\s+in\s+care|care provider)\b/i,
       ],
-      // Ignore checklist/template instructions and explicit non-applicability statements.
       notAppliesWhen: /\b(for (residential )?care homes?\s+(identify|include|record)|care home staff\/resident ratio|if applicable|not applicable|n\/a|not a care home|no residential care|care home\s*:\s*no)\b/i,
-      patterns: [/\b(day shift|night shift|staff\/residents? ratio)\b/i, /\b(non-ambulant|storey location)\b/i],
+      patterns: [
+        /\b(day shift|night shift)\s*:\s*\d+/i,
+        /\bstaff\s*\/?\s*residents?\s*ratio\b/i,
+        /\bnon-ambulant\b/i,
+      ],
       suggestion: 'For care homes, include staff/resident ratios and non-ambulant resident details.',
     },
     {
@@ -174,7 +228,10 @@ const checklistConfig = {
       severity: 'medium',
       sectionHint: '8. Fire Risk Assessment',
       mode: 'any',
-      patterns: [/\b(previous fire|history of fire|arson|electrical faults?|smoking|portable heaters?|cooking|hot works?)\b/i],
+      patterns: [
+        /\b(previous fire|history of fire|fire history)\b.{0,100}\b(yes|no|none|recorded|occurred)/i,
+        /\bfire cause\b.{0,50}\b(arson|electrical|smoking|cooking|hot works?)/i,
+      ],
       suggestion: 'Record previous fire history and likely causes where known.',
     },
     {
@@ -183,7 +240,10 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: '8. Fire Risk Assessment',
       mode: 'all',
-      patterns: [/\b(risk rating|overall premises risk)\b/i, /\b(likelihood|consequence)\b/i],
+      patterns: [
+        /\b(risk rating|overall premises risk|overall risk)\s*:\s*(trivial|tolerable|moderate|substantial|intolerable)/i,
+        /\b(likelihood|probability)\s*:\s*(very low|low|medium|high|very high)/i,
+      ],
       suggestion: 'Record overall premises risk rating with likelihood and consequence.',
     },
     {
@@ -192,9 +252,12 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: '9.6. Fire Protection Systems - Fire Alarm',
       mode: 'all',
-      // Some premises explicitly have no alarm system/category to classify.
       notAppliesWhen: /\b(no (automatic )?fire alarm (system )?(installed|present)|fire alarm\s*:\s*(none|n\/a)|alarm category\s*:\s*(none|n\/a)|not applicable)\b/i,
-      patterns: [/\b(means for detecting fire|fire alarm|warning to occupants)\b/i, /\b(bs\s*5839|category|L[1-5]|P[1-2])\b/i],
+      patterns: [
+        /\b(fire (detection|alarm) system|automatic fire detection|AFD)\b/i,
+        /\bbs\s*5839\b/i,
+        /\bcategory\s*:\s*(L[1-5]|P[1-2]|M)/i,
+      ],
       suggestion: 'Describe fire detection/warning system and BS 5839 category/coverage details.',
     },
     {
@@ -203,7 +266,10 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: 'Means of Escape',
       mode: 'any',
-      patterns: [/\b(means of escape|final exits?|travel distances?|exit width|stair wells?)\b/i],
+      patterns: [
+        /\bmeans of escape\b.{0,100}\b(adequate|satisfactory|provided|route)/i,
+        /\b(final exit|escape route|travel distance)\s*:\s*\S{3,}/i,
+      ],
       suggestion: 'Describe means of escape, final exits, and travel distance/exit-width details where relevant.',
     },
     {
@@ -212,7 +278,10 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: '9.7. Compartmentation',
       mode: 'all',
-      patterns: [/\b(compartmentation|fire rating)\b/i, /\b(fire doors?|door inspections?)\b/i],
+      patterns: [
+        /\bcompartmentation\b.{0,100}\b(adequate|satisfactory|maintained|breached)/i,
+        /\bfire doors?\b.{0,50}\b(condition|inspection|FD\d{2}|satisfactory)/i,
+      ],
       suggestion: 'Include compartmentation details and fire door condition/inspection status.',
     },
     {
@@ -221,9 +290,11 @@ const checklistConfig = {
       severity: 'high',
       sectionHint: 'Emergency Lighting',
       mode: 'all',
-      // Allow explicit N/A statements for premises where emergency lighting is not required/provided.
       notAppliesWhen: /\b(emergency lighting\s*:\s*(none|n\/a|not applicable)|no emergency lighting (installed|provided)|not required due to borrowed light)\b/i,
-      patterns: [/\b(emergency lighting)\b/i, /\b(maintained|non-maintained|means of escape|locations observed)\b/i],
+      patterns: [
+        /\bemergency lighting\b.{0,50}\b(type|maintained|non-maintained|provided)/i,
+        /\bemergency lighting\s*:\s*(yes|provided|installed|maintained|non-maintained)/i,
+      ],
       suggestion: 'State emergency lighting type and where it is provided/observed.',
     },
   ],
