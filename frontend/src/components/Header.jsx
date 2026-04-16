@@ -8,13 +8,13 @@ const Header = () => {
   return (
     <header className="bg-white dark:bg-gray-900 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-4 py-4 sm:h-16 sm:flex-row sm:items-center sm:justify-between sm:py-0">
-          <Link to="/" className="flex items-center space-x-2 self-start">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-4 sm:h-16 sm:py-0">
+          <Link to="/" className="flex items-center space-x-2">
             <FileCheck className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
             <span className="text-xl font-bold text-gray-900 dark:text-white">QC Checker</span>
           </Link>
 
-          <nav className="flex flex-wrap items-center justify-start gap-x-4 gap-y-2 sm:justify-end">
+          <nav className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
             {isAuthenticated ? (
               <>
                 <span className="text-sm text-gray-600 dark:text-gray-300">
