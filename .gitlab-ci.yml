@@ -1,0 +1,42 @@
+image: node:18
+
+default:
+  
+  tags:
+    - comsc-ci
+
+stages:
+  - install
+  - build
+  - test
+
+cache:
+  key: node-cache-key
+  paths:
+    - backend/node_modules/
+    - frontend/node_modules/
+
+install-backend:
+  stage: install
+  script:
+    - cd backend && npm install
+
+install-frontend:
+  stage: install
+  script:
+    - cd frontend && npm install
+
+build-frontend:
+  stage: build
+  script:
+    - cd frontend && npm install
+    - npm run build
+
+# test-backend:
+#   stage: test
+#   dependencies:
+#     - install-backend
+#   script:
+#     - cd backend && npm test 
+
+#uncomment when there's tests
