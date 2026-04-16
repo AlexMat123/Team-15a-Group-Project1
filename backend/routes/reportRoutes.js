@@ -10,6 +10,7 @@ const {
   getProfileAnalytics,
   getReportText,
   downloadReport,
+  downloadAnnotatedPdf,
 } = require('../controllers/reportController');
 const { protect } = require('../middleware/authMiddleware');
 const { upload, handleUploadError } = require('../middleware/uploadMiddleware');
@@ -32,5 +33,6 @@ router
 router.post('/:id/analyze', analyzeReport);
 router.get('/:id/text', getReportText);
 router.get('/:id/download', downloadReport);
+router.get('/:id/download-annotated', downloadAnnotatedPdf);
 
 module.exports = router;

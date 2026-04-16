@@ -118,16 +118,16 @@ const Profile = () => {
 
   const getStatusBadge = (status) => {
     const badges = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      processing: 'bg-blue-100 text-blue-800',
-      analyzed: 'bg-green-100 text-green-800',
-      failed: 'bg-red-100 text-red-800',
+      pending: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300',
+      processing: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
+      analyzed: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300',
+      failed: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300',
     };
 
     return (
       <span
         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          badges[status] || 'bg-gray-100 text-gray-700'
+          badges[status] || 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
         }`}
       >
         {status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown'}
@@ -141,14 +141,14 @@ const Profile = () => {
     }
 
     const badges = {
-      good: { text: 'Passed', color: 'bg-green-100 text-green-800' },
-      bad: { text: 'Failed', color: 'bg-red-100 text-red-800' },
-      uncertain: { text: 'Uncertain', color: 'bg-amber-100 text-amber-800' },
+      good: { text: 'Passed', color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' },
+      bad: { text: 'Failed', color: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' },
+      uncertain: { text: 'Uncertain', color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300' },
     };
 
     const badge = badges[report.qualityLabel] || {
       text: 'Uncertain',
-      color: 'bg-gray-100 text-gray-700',
+      color: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300',
     };
 
     return (
@@ -169,32 +169,32 @@ const Profile = () => {
     {
       key: 'placeholder',
       label: 'Placeholder',
-      valueClass: 'text-orange-600 dark:text-orange-800',
-      cardClass: 'bg-orange-50',
+      valueClass: 'text-orange-600 dark:text-orange-400',
+      cardClass: 'bg-orange-50 dark:bg-orange-900/30',
     },
     {
       key: 'consistency',
       label: 'Consistency',
-      valueClass: 'text-blue-600 dark:text-blue-800',
-      cardClass: 'bg-blue-50',
+      valueClass: 'text-blue-600 dark:text-blue-400',
+      cardClass: 'bg-blue-50 dark:bg-blue-900/30',
     },
     {
       key: 'compliance',
       label: 'Compliance',
-      valueClass: 'text-red-600 dark:text-red-800',
-      cardClass: 'bg-red-50',
+      valueClass: 'text-red-600 dark:text-red-400',
+      cardClass: 'bg-red-50 dark:bg-red-900/30',
     },
     {
       key: 'formatting',
       label: 'Formatting',
-      valueClass: 'text-purple-600 dark:text-purple-800',
-      cardClass: 'bg-purple-50',
+      valueClass: 'text-purple-600 dark:text-purple-400',
+      cardClass: 'bg-purple-50 dark:bg-purple-900/30',
     },
     {
       key: 'missing_data',
       label: 'Missing Data',
-      valueClass: 'text-green-600 dark:text-green-800',
-      cardClass: 'bg-green-50',
+      valueClass: 'text-green-600 dark:text-green-400',
+      cardClass: 'bg-green-50 dark:bg-green-900/30',
     },
   ];
 
@@ -244,11 +244,11 @@ const Profile = () => {
       <main className="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Profile</h1>
-          <p className="text-gray-600 dark:text-gray-300 mt-2">
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
             Manage your account settings and review analytics from your uploaded reports.
           </p>
 
-          <div className="mt-6 space-y-2 text-sm text-gray-700 dark:text-gray-200">
+          <div className="mt-6 space-y-2 text-sm text-gray-700 dark:text-gray-300">
             <p><strong>Name:</strong> {user?.name}</p>
             <p><strong>Email:</strong> {user?.email}</p>
             <p><strong>Role:</strong> {user?.role}</p>
@@ -273,12 +273,12 @@ const Profile = () => {
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Report Analytics</h2>
-              <p className="text-gray-600 mt-1 dark:text-gray-300">
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
                 A summary of your previously uploaded reports.
               </p>
             </div>
             <div className="w-full sm:w-56">
-              <label htmlFor="analytics-scope" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+              <label htmlFor="analytics-scope" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Time Range
               </label>
               <select
@@ -300,7 +300,7 @@ const Profile = () => {
               Loading analytics...
             </div>
           ) : analyticsError ? (
-            <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center">
+            <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 flex items-center">
               <AlertCircle className="w-5 h-5 mr-2" />
               {analyticsError}
             </div>
@@ -308,7 +308,7 @@ const Profile = () => {
             <div className="mt-6 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-8 text-center">
               <FileText className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No analytics yet</h3>
-              <p className="text-gray-600 dark:text-gray-300 mt-2">
+              <p className="text-gray-600 dark:text-gray-400 mt-2">
                 Upload your first report to start building analytics on this page.
               </p>
               <Link
@@ -328,7 +328,7 @@ const Profile = () => {
                     <div key={card.label} className="rounded-xl bg-gray-50 dark:bg-gray-800 p-4 border border-gray-100 dark:border-gray-700">
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-gray-500 dark:text-gray-400">{card.label}</p>
-                        <Icon className="w-5 h-5 text-indigo-600" />
+                        <Icon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                       </div>
                       <p className="text-2xl font-bold text-gray-900 dark:text-white mt-3">{card.value}</p>
                     </div>
@@ -337,13 +337,13 @@ const Profile = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
                   <p className="text-sm text-gray-500 dark:text-gray-400">Failed Reports</p>
                   <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
                     {analytics.summary?.failedReports ?? 0}
                   </p>
                 </div>
-                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
                   <p className="text-sm text-gray-500 dark:text-gray-400">Passed Reviews</p>
                   <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
                     {analytics.qualityBreakdown?.good ?? 0}
@@ -353,11 +353,11 @@ const Profile = () => {
 
               <div className="mt-8">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Average Errors Per Report</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 t-1">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   The average number of each error type found per analysed report.
                 </p>
 
-                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-5 mt-4">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
                     {averageErrorTypeBreakdown.map((item) => (
                       <div
@@ -365,19 +365,19 @@ const Profile = () => {
                         className={`rounded-xl px-4 py-4 text-center border border-transparent ${item.cardClass}`}
                       >
                         <p className={`text-2xl font-bold ${item.valueClass}`}>{item.average}</p>
-                        <p className="text-sm text-gray-700 dark:text-gray-800 mt-1">{item.label}</p>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">{item.label}</p>
                       </div>
                     ))}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                    <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4">
+                    <div className="rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 p-4">
                       <p className="text-sm text-gray-500 dark:text-gray-400">Analysed Reports</p>
                       <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
                         {analytics.summary?.analyzedReports ?? 0}
                       </p>
                     </div>
-                    <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4">
+                    <div className="rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 p-4">
                       <p className="text-sm text-gray-500 dark:text-gray-400">Overall Average Errors</p>
                       <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
                         {analytics.summary?.averageErrorsPerReport ?? 0}
@@ -396,7 +396,7 @@ const Profile = () => {
                   This chart is built from your uploaded reports in the selected time range, grouped by date and matched against each analysed report&apos;s stored quality assessment, and it is used to show whether the share of reports passing automated review is improving, declining, or staying consistent over time.
                 </p>
 
-                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-5 mt-4">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
                   <ResponsiveContainer width="100%" height={260}>
                     <LineChart data={passRateChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -414,6 +414,7 @@ const Profile = () => {
                           if (!point) return label;
                           return `${label} - ${point.passedCount}/${point.analyzedCount} passed`;
                         }}
+                        contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }}
                       />
                       <Legend />
                       <Line
@@ -439,7 +440,7 @@ const Profile = () => {
                   This trend uses the stored quality score from each analysed report&apos;s quality assessment, converts it into a percentage, and orders the latest reports by upload date so you can see how individual report quality changes and spot drops or improvement more easily.
                 </p>
 
-                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-5 mt-4">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
                   {analytics.qualityScoreTrend?.length ? (
                     <ResponsiveContainer width="100%" height={280}>
                       <LineChart data={qualityScoreChartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
@@ -452,6 +453,7 @@ const Profile = () => {
                             const point = payload?.[0]?.payload;
                             return point ? `${point.fullLabel} - ${point.date}` : label;
                           }}
+                          contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }}
                         />
                         <Legend />
                         <Line
@@ -480,7 +482,7 @@ const Profile = () => {
                   This breakdown comes from the stored error summaries on your analysed reports, where detected issues are grouped into categories such as placeholder, consistency, compliance, formatting, and missing data, and it is used to highlight which types of problems appear most often across your work.
                 </p>
 
-                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-5 mt-4">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={commonErrorTypeChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -488,6 +490,7 @@ const Profile = () => {
                       <YAxis tick={{ fontSize: 12 }} />
                       <Tooltip
                         formatter={(value) => [`${value}`, 'Errors']}
+                        contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }}
                       />
                       <Bar dataKey="errors" name="Errors" radius={[6, 6, 0, 0]}>
                         {commonErrorTypeChartData.map((entry) => (
@@ -508,7 +511,7 @@ const Profile = () => {
                   This chart is generated from the individual error messages stored on each analysed report rather than just the broad error categories, and it is used to show the exact checklist failures that recur most often so you can target the specific causes behind repeated issues.
                 </p>
 
-                <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-5 mt-4">
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 mt-4">
                   {analytics.checklistFailureBreakdown?.length ? (
                     <ResponsiveContainer width="100%" height={320}>
                       <BarChart
@@ -522,6 +525,7 @@ const Profile = () => {
                         <Tooltip
                           formatter={(value) => [`${value}`, 'Occurrences']}
                           labelFormatter={(label, payload) => payload?.[0]?.payload?.fullLabel || label}
+                          contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }}
                         />
                         <Bar dataKey="count" fill="#6366F1" radius={[0, 6, 6, 0]} />
                       </BarChart>
@@ -542,7 +546,7 @@ const Profile = () => {
                   </div>
                   <Link
                     to="/dashboard"
-                    className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                    className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
                   >
                     View all
                   </Link>
@@ -553,22 +557,22 @@ const Profile = () => {
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                       <thead className="bg-gray-50 dark:bg-gray-800">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             Report
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             Status
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             Errors
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             Result
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             Date
                           </th>
-                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             Action
                           </th>
                         </tr>
@@ -579,7 +583,7 @@ const Profile = () => {
 
                           return (
                             <Fragment key={report._id}>
-                              <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/70">
+                              <tr className="bg-white dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                 <td className="px-4 py-4 text-sm font-medium text-gray-900 dark:text-white">
                                   <button
                                     type="button"
@@ -601,7 +605,7 @@ const Profile = () => {
                                   {report.status === 'analyzed' ? (
                                     <span
                                       className={`font-medium ${
-                                        report.errorCount > 0 ? 'text-red-600' : 'text-green-600'
+                                        report.errorCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
                                       }`}
                                     >
                                       {report.errorCount} {report.errorCount === 1 ? 'error' : 'errors'}
@@ -619,14 +623,14 @@ const Profile = () => {
                                 <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                                   <Link
                                     to={`/report/${report._id}`}
-                                    className="text-indigo-600 hover:text-indigo-900"
+                                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300"
                                   >
                                     View
                                   </Link>
                                 </td>
                               </tr>
                               {isExpanded && (
-                                <tr className="bg-gray-50 dark:bg-gray-800/60">
+                                <tr className="bg-gray-50 dark:bg-gray-800">
                                   <td colSpan="6" className="px-4 py-5">
                                     <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-4">
                                       <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -641,7 +645,7 @@ const Profile = () => {
                                             <p className={`text-2xl font-bold ${card.valueClass}`}>
                                               {report.errorSummary?.[card.key] ?? 0}
                                             </p>
-                                            <p className="text-sm text-gray-700 dark:text-gray-800 mt-1">{card.label}</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">{card.label}</p>
                                           </div>
                                         ))}
                                       </div>

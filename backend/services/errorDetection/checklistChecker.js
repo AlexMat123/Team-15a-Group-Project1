@@ -32,26 +32,48 @@ const evaluateItem = (text, item) => {
   return {
     status: isSatisfied ? 'pass' : 'fail',
     matched,
+    total: (item.patterns || []).length,
+    matchedCount: matched.length,
   };
 };
 
 const detect = (text, sections = []) => {
   const errors = [];
+  const normalizedText = text.toLowerCase();
+  
+  const hasSubstantialContent = normalizedText.length > 5000;
+  
+  if (!hasSubstantialContent) {
+    return errors;
+  }
 
   checklistConfig.items.forEach((item) => {
     const result = evaluateItem(text, item);
     if (result.status !== 'fail') return;
 
-    errors.push({
-      type: 'compliance',
-      severity: item.severity || 'medium',
-      message: `Checklist ${item.id} not evidenced: ${item.title}`,
-      location: {
-        section: item.sectionHint || 'Checklist',
-      },
-      suggestion: item.suggestion || 'Provide required content to satisfy checklist item',
-      originalText: `Checklist ${checklistConfig.version} / ${item.id}`,
-    });
+    if (item.mode === 'all' && result.matchedCount > 0) {
+      errors.push({
+        type: 'compliance',
+        severity: 'low',
+        message: `Checklist ${item.id} partially evidenced: ${item.title}`,
+        location: {
+          section: item.sectionHint || 'Checklist',
+        },
+        suggestion: item.suggestion || 'Provide additional content to fully satisfy checklist item',
+        originalText: `Checklist ${checklistConfig.version} / ${item.id} (${result.matchedCount}/${result.total} criteria met)`,
+      });
+    } else {
+      errors.push({
+        type: 'compliance',
+        severity: item.severity || 'medium',
+        message: `Checklist ${item.id} not evidenced: ${item.title}`,
+        location: {
+          section: item.sectionHint || 'Checklist',
+        },
+        suggestion: item.suggestion || 'Provide required content to satisfy checklist item',
+        originalText: `Checklist ${checklistConfig.version} / ${item.id}`,
+      });
+    }
   });
 
   return errors;

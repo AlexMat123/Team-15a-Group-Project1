@@ -332,7 +332,7 @@ const Dashboard = () => {
                 </thead>
                 <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200">
                   {reports.map((report) => (
-                    <tr key={report._id} className="hover:bg-gray-50">
+                    <tr key={report._id} className="bg-white dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <FileText className="w-8 h-8 text-red-500 mr-3" />
@@ -367,7 +367,7 @@ const Dashboard = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <Link
                           to={`/report/${report._id}`}
-                          className="text-indigo-600 hover:text-indigo-900 mr-4"
+                          className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 mr-4"
                         >
                           View
                         </Link>

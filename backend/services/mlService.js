@@ -91,49 +91,71 @@ const calculateSimilarity = (embedding1, embedding2) => {
   return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
 };
 
-const analyzeSectionCompleteness = async (sectionText) => {
-  const labels = [
-    'complete and detailed',
-    'partially complete',
-    'incomplete or missing information',
-    'contains placeholder text',
-    'template text not filled in'
-  ];
+const COMPLETENESS_LABELS = [
+  'This text is complete professional content with specific details',
+  'This text contains unfilled placeholder markers like brackets or XXX',
+  'This text is a template with instructions to be replaced',
+];
 
-  const result = await classifyText(sectionText, labels);
+const LABEL_MAP = {
+  'This text is complete professional content with specific details': 'complete',
+  'This text contains unfilled placeholder markers like brackets or XXX': 'placeholder',
+  'This text is a template with instructions to be replaced': 'template',
+};
+
+const analyzeSectionCompleteness = async (sectionText) => {
+  const result = await classifyText(sectionText, COMPLETENESS_LABELS);
   
   if (!result) return null;
 
+  const mappedLabel = LABEL_MAP[result.topLabel] || result.topLabel;
+  const isComplete = mappedLabel === 'complete';
+  
+  const allScores = {};
+  result.labels.forEach((label, i) => {
+    const mapped = LABEL_MAP[label] || label;
+    allScores[mapped] = result.scores[i];
+  });
+
   return {
-    isComplete: result.topLabel === 'complete and detailed',
+    isComplete,
     completenessScore: result.topScore,
-    classification: result.topLabel,
-    allScores: Object.fromEntries(
-      result.labels.map((label, i) => [label, result.scores[i]])
-    ),
+    classification: mappedLabel,
+    allScores,
   };
 };
 
-const detectErrorType = async (text) => {
-  const errorLabels = [
-    'placeholder or template text',
-    'inconsistent information',
-    'missing required data',
-    'formatting issue',
-    'compliance violation',
-    'no error detected'
-  ];
+const ERROR_TYPE_LABELS = [
+  'This text has no errors and is properly written',
+  'This text contains placeholder markers that need to be filled in',
+  'This text has inconsistent or conflicting information',
+  'This text is missing required data fields',
+];
 
-  const result = await classifyText(text, errorLabels);
+const ERROR_LABEL_MAP = {
+  'This text has no errors and is properly written': 'no error',
+  'This text contains placeholder markers that need to be filled in': 'placeholder',
+  'This text has inconsistent or conflicting information': 'inconsistent',
+  'This text is missing required data fields': 'missing data',
+};
+
+const detectErrorType = async (text) => {
+  const result = await classifyText(text, ERROR_TYPE_LABELS);
   
   if (!result) return null;
 
+  const mappedLabel = ERROR_LABEL_MAP[result.topLabel] || result.topLabel;
+
+  const allScores = {};
+  result.labels.forEach((label, i) => {
+    const mapped = ERROR_LABEL_MAP[label] || label;
+    allScores[mapped] = result.scores[i];
+  });
+
   return {
-    errorType: result.topLabel,
+    errorType: mappedLabel,
     confidence: result.topScore,
-    allScores: Object.fromEntries(
-      result.labels.map((label, i) => [label, result.scores[i]])
-    ),
+    allScores,
   };
 };
 
