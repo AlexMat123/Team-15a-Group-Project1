@@ -27,6 +27,7 @@ const ReportDetail = () => {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [downloadError, setDownloadError] = useState('');
   const [expandedTypes, setExpandedTypes] = useState({});
   const [downloading, setDownloading] = useState(false);
   const [downloadingAnnotated, setDownloadingAnnotated] = useState(false);
@@ -52,6 +53,7 @@ const ReportDetail = () => {
 
   const handleDownload = async () => {
     setDownloading(true);
+    setDownloadError('');
     try {
       const response = await api.get(`/reports/${id}/download`, {
         responseType: 'blob',
@@ -66,7 +68,7 @@ const ReportDetail = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to download report');
+      setDownloadError(err.response?.data?.message || 'Failed to download report');
     } finally {
       setDownloading(false);
     }
@@ -74,7 +76,7 @@ const ReportDetail = () => {
 
   const handleDownloadAnnotated = async () => {
     setDownloadingAnnotated(true);
-    setError('');
+    setDownloadError('');
     try {
       const response = await api.get(`/reports/${id}/download-annotated`, {
         responseType: 'blob',
@@ -110,7 +112,7 @@ const ReportDetail = () => {
       } else if (err.message) {
         errorMessage = err.message;
       }
-      setError(errorMessage);
+      setDownloadError(errorMessage);
       console.error('Annotated PDF download error:', err);
     } finally {
       setDownloadingAnnotated(false);
@@ -274,6 +276,21 @@ const ReportDetail = () => {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Dashboard
         </Link>
+
+        {downloadError && (
+          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6 flex items-center justify-between">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-red-500 dark:text-red-400 mr-3 flex-shrink-0" />
+              <p className="text-red-700 dark:text-red-300 text-sm">{downloadError}</p>
+            </div>
+            <button
+              onClick={() => setDownloadError('')}
+              className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 ml-4 text-lg font-bold flex-shrink-0"
+            >
+              &times;
+            </button>
+          </div>
+        )}
 
         <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm p-6 mb-6">
           <div className="flex items-start justify-between">
