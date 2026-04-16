@@ -4,10 +4,16 @@ import {
   BarChart3,
   Bell,
   CheckCircle2,
+  DownloadCloud,
   Download,
   Eye,
   FileCheck,
   FileSearch,
+  Highlighter,
+  KeyRound,
+  Lock,
+  MonitorCog,
+  ShieldCheck,
   Settings2,
   Shield,
   Upload,
@@ -39,6 +45,11 @@ const features = [
     title: 'Detailed report review',
     description: 'Each analysed report shows grouped findings, issue counts, result labels, and a downloadable report file.',
     icon: FileSearch,
+  },
+  {
+    title: 'Annotated PDF download',
+    description: 'When an analysed report contains errors, users can open the report detail page and download an annotated copy of the original PDF.',
+    icon: Highlighter,
   },
   {
     title: 'Team collaboration',
@@ -75,12 +86,12 @@ const reportSteps = [
   },
   {
     title: 'Open the finished report',
-    description: 'Use the report detail page to inspect grouped issues, location hints, suggestions, and the final result.',
+    description: 'Use the report detail page to inspect grouped issues, location hints, suggestions, the final result, and any annotated PDF download option.',
     column: 'left',
   },
   {
     title: 'Download or act on the result',
-    description: 'Download the generated output, fix issues in the source document, and re-upload a revised report if needed.',
+    description: 'Download the generated output or annotated PDF, fix issues in the source document, and re-upload a revised report if needed.',
     column: 'right',
   },
   {
@@ -114,8 +125,27 @@ const resultMeaning = [
   },
   {
     label: 'Downloadable output',
-    description: 'Completed reports can be downloaded from the dashboard or report detail page.',
+    description: 'Completed reports can be downloaded from the dashboard or report detail page, and error-marked PDFs are available from the report detail page when issues were found.',
     icon: Download,
+  },
+];
+
+const annotatedPdfSteps = [
+  {
+    title: 'Open an analysed report',
+    description: 'Upload a PDF from the dashboard, wait until its status changes to Analysed, then open that report from your reports list.',
+  },
+  {
+    title: 'Look for the Annotated PDF button',
+    description: 'The button appears in the top-right area of the report detail page next to Download Report, but only when the analysis found one or more errors.',
+  },
+  {
+    title: 'Download the marked-up file',
+    description: 'Select Annotated PDF to download a copy of the original report with colour-coded highlights, numbered markers, and a summary page listing the detected issues.',
+  },
+  {
+    title: 'Use it to fix the source report',
+    description: 'Match the numbered highlights with the issue list, correct the original document, then upload the revised PDF again to run a fresh check.',
   },
 ];
 
@@ -123,7 +153,72 @@ const supportTips = [
   'Use the dashboard if you want to upload and review your own reports.',
   'Use the team page if you need team analytics, goals, or announcements.',
   'Use settings if you want to adjust notifications, contrast, motion, or font size.',
+  'If an analysed report shows no errors, the Annotated PDF option will not appear because there is nothing to mark up.',
   'Use the admin area only if your account has admin access.',
+];
+
+const accountSections = [
+  {
+    title: 'Profile analytics',
+    description: 'The profile page shows your personal report totals, analysed report count, error trends, pass or fail patterns, and recent report activity.',
+    icon: BarChart3,
+  },
+  {
+    title: 'Password reset requests',
+    description: 'If you cannot access your account normally, you can submit a password reset request from the profile page for admin follow-up.',
+    icon: KeyRound,
+  },
+  {
+    title: 'Display and accessibility',
+    description: 'Settings let you change theme, high contrast mode, font size, colour-blind options, reduced motion, and notification preferences.',
+    icon: MonitorCog,
+  },
+  {
+    title: 'Data and privacy tools',
+    description: 'Settings also include data export and account deletion options for users who need a copy of their information or want to close their account.',
+    icon: DownloadCloud,
+  },
+];
+
+const teamFeatureSections = [
+  {
+    title: 'Team goals',
+    description: 'Team leads can create progress goals such as pass rate, report submission, or average errors, and team members can track current progress against them.',
+    icon: CheckCircle2,
+  },
+  {
+    title: 'Announcements',
+    description: 'Team leads can post announcements and team members can read and acknowledge unread updates from the team page.',
+    icon: Bell,
+  },
+  {
+    title: 'Member comparison analytics',
+    description: 'Team leads can compare two team members across report volume, pass rate, error types, quality score trends, and recent activity.',
+    icon: Users,
+  },
+];
+
+const adminFeatureSections = [
+  {
+    title: 'User and support management',
+    description: 'Admins can create users, reset passwords, handle password reset requests, and remove accounts when needed.',
+    icon: ShieldCheck,
+  },
+  {
+    title: 'AI training tools',
+    description: 'Admins can upload labelled training PDFs, mark reports as good or bad examples, sync training data, and activate report templates.',
+    icon: FileCheck,
+  },
+  {
+    title: 'Team administration',
+    description: 'Admins can create teams, assign leads, manage team membership, and review team-level analytics.',
+    icon: Users,
+  },
+  {
+    title: 'Security and audit logs',
+    description: 'Admins can review audit log activity such as login events, training actions, and account support actions from the security area.',
+    icon: Lock,
+  },
 ];
 
 const HowItWorks = () => {
@@ -286,6 +381,100 @@ const HowItWorks = () => {
                 >
                   <Icon className="h-6 w-6 text-indigo-600 dark:text-indigo-300" />
                   <h3 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">{label}</h3>
+                  <p className="mt-2 text-gray-600 dark:text-gray-300">{description}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="annotated-pdf" aria-labelledby="annotated-pdf-heading" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
+          <div className="max-w-3xl">
+            <h2 id="annotated-pdf-heading" className="text-3xl font-bold text-gray-900 dark:text-white">How to use the annotated PDF</h2>
+            <p className="mt-3 text-gray-600 dark:text-gray-300">
+              The annotated PDF is designed to help you move from a list of findings to the exact document areas that need attention.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-2">
+            {annotatedPdfSteps.map(({ title, description }) => (
+              <article
+                key={title}
+                className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+              >
+                <div className="inline-flex rounded-xl bg-orange-100 p-3 text-orange-600 dark:bg-orange-500/10 dark:text-orange-300">
+                  <Highlighter className="h-6 w-6" />
+                </div>
+                <h3 className="mt-4 text-xl font-semibold text-gray-900 dark:text-white">{title}</h3>
+                <p className="mt-2 text-gray-600 dark:text-gray-300">{description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="account-settings" aria-labelledby="account-settings-heading" className="bg-white dark:bg-gray-900">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
+            <div className="max-w-3xl">
+              <h2 id="account-settings-heading" className="text-3xl font-bold text-gray-900 dark:text-white">Account, settings, and privacy</h2>
+              <p className="mt-3 text-gray-600 dark:text-gray-300">
+                Beyond report checking, the app also includes account tools for analytics, accessibility, notifications, and privacy-related actions.
+              </p>
+            </div>
+
+            <div className="mt-10 grid gap-6 md:grid-cols-2">
+              {accountSections.map(({ title, description, icon: Icon }) => (
+                <article
+                  key={title}
+                  className="rounded-2xl border border-gray-200 p-6 shadow-sm dark:border-gray-800"
+                >
+                  <Icon className="h-6 w-6 text-indigo-600 dark:text-indigo-300" />
+                  <h3 className="mt-4 text-xl font-semibold text-gray-900 dark:text-white">{title}</h3>
+                  <p className="mt-2 text-gray-600 dark:text-gray-300">{description}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="team-features" aria-labelledby="team-features-heading" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
+          <div className="max-w-3xl">
+            <h2 id="team-features-heading" className="text-3xl font-bold text-gray-900 dark:text-white">Team features</h2>
+            <p className="mt-3 text-gray-600 dark:text-gray-300">
+              The team page is not just a summary view. It includes collaboration tools for communication, target-setting, and team performance review.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-3">
+            {teamFeatureSections.map(({ title, description, icon: Icon }) => (
+              <article
+                key={title}
+                className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+              >
+                <Icon className="h-6 w-6 text-indigo-600 dark:text-indigo-300" />
+                <h3 className="mt-4 text-xl font-semibold text-gray-900 dark:text-white">{title}</h3>
+                <p className="mt-2 text-gray-600 dark:text-gray-300">{description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="admin-features" aria-labelledby="admin-features-heading" className="bg-white dark:bg-gray-900">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-16">
+            <div className="max-w-3xl">
+              <h2 id="admin-features-heading" className="text-3xl font-bold text-gray-900 dark:text-white">Admin features</h2>
+              <p className="mt-3 text-gray-600 dark:text-gray-300">
+                Admin users have access to broader management and monitoring tools that are not available to standard users or team members.
+              </p>
+            </div>
+
+            <div className="mt-10 grid gap-6 md:grid-cols-2">
+              {adminFeatureSections.map(({ title, description, icon: Icon }) => (
+                <article
+                  key={title}
+                  className="rounded-2xl border border-gray-200 p-6 shadow-sm dark:border-gray-800"
+                >
+                  <Icon className="h-6 w-6 text-indigo-600 dark:text-indigo-300" />
+                  <h3 className="mt-4 text-xl font-semibold text-gray-900 dark:text-white">{title}</h3>
                   <p className="mt-2 text-gray-600 dark:text-gray-300">{description}</p>
                 </article>
               ))}
