@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 
+const BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
 const COLORS = ['#6366f1', '#f59e0b', '#ef4444', '#10b981', '#3b82f6'];
 
 const TeamPage = () => {
@@ -67,7 +69,7 @@ const TeamPage = () => {
     setTeamStatsError('');
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('/api/teams/my-team/stats', {
+      const res = await axios.get(`${BASE_URL}/teams/my-team/stats`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { range },
       });
@@ -84,7 +86,7 @@ const TeamPage = () => {
   const fetchGoals = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('/api/teams/my-team/goals', {
+      const res = await axios.get(`${BASE_URL}/teams/my-team/goals`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setGoals(res.data.goals || []);
@@ -97,7 +99,7 @@ const TeamPage = () => {
   const fetchAnnouncements = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('/api/teams/my-team/announcements', {
+      const res = await axios.get(`${BASE_URL}/teams/my-team/announcements`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const all = res.data || [];
@@ -115,7 +117,7 @@ const TeamPage = () => {
       try {
         const token = localStorage.getItem('token');
         const headers = { Authorization: `Bearer ${token}` };
-        const res = await axios.get('/api/teams/my-team', { headers });
+        const res = await axios.get(`${BASE_URL}/teams/my-team`, { headers });
         setTeam(res.data);
 
         // Fetch stats if team lead
@@ -148,7 +150,7 @@ const TeamPage = () => {
     setShowAddModal(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('/api/teams/available-users', {
+      const res = await axios.get(`${BASE_URL}/teams/available-users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setAvailableUsers(res.data);
@@ -170,7 +172,7 @@ const TeamPage = () => {
     setAdding(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.patch('/api/teams/my-team/members',
+      const res = await axios.patch(`${BASE_URL}/teams/my-team/members`,
         { memberIds: selectedIds },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -186,7 +188,7 @@ const TeamPage = () => {
   const handleRemoveMember = async (userId) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.delete(`/api/teams/my-team/members/${userId}`, {
+      const res = await axios.delete(`${BASE_URL}/teams/my-team/members/${userId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setTeam(res.data);
@@ -210,7 +212,7 @@ const TeamPage = () => {
     setComparisonLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('/api/teams/my-team/comparison', {
+      const res = await axios.get(`${BASE_URL}/teams/my-team/comparison`, {
         headers: { Authorization: `Bearer ${token}` },
         params: {
           primaryUserId: comparisonPrimaryUserId,
@@ -250,7 +252,7 @@ const TeamPage = () => {
     setSavingAnnouncement(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post('/api/teams/my-team/announcements',
+      const res = await axios.post(`${BASE_URL}/teams/my-team/announcements`,
         { title: annTitle.trim(), content: annContent.trim() },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -269,7 +271,7 @@ const TeamPage = () => {
     if (!window.confirm('Delete this announcement?')) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`/api/teams/my-team/announcements/${id}`, {
+      await axios.delete(`${BASE_URL}/teams/my-team/announcements/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setAnnouncements(prev => prev.filter(a => a._id !== id));
@@ -285,7 +287,7 @@ const TeamPage = () => {
     setAcknowledging(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.patch(`/api/teams/my-team/announcements/${announcementId}/read`, {}, {
+      await axios.patch(`${BASE_URL}/teams/my-team/announcements/${announcementId}/read`, {}, {
         headers: { Authorization: `Bearer ${token}` },
       });
       // Mark as read in announcements list too
@@ -311,7 +313,7 @@ const TeamPage = () => {
     setSavingGoal(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post('/api/teams/my-team/goals',
+      const res = await axios.post(`${BASE_URL}/teams/my-team/goals`,
         { title: goalTitle.trim(), type: goalType, target: Number(goalTarget), deadline: goalDeadline || undefined },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -332,7 +334,7 @@ const TeamPage = () => {
     if (!window.confirm('Delete this goal?')) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`/api/teams/my-team/goals/${goalId}`, {
+      await axios.delete(`${BASE_URL}/teams/my-team/goals/${goalId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setGoals(prev => prev.filter(g => g._id !== goalId));
